@@ -1,5 +1,6 @@
-from cpython cimport array
-import array
+# cython: language_level=3
+
+from cpython cimport bool
 import re
 
 
@@ -8,7 +9,7 @@ class NoRoute(Exception):
 
 cdef enum:
     NODE_COMPARE_STR, NODE_COMPARE_PCRE, NODE_COMPARE_OPCODE
-    OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA
+    OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
 
 
 OPCODES = {
@@ -20,6 +21,7 @@ OPCODES = {
     b'[0-9]+': OP_EXPECT_MORE_DIGITS,
     b'[^/]+': OP_EXPECT_NOSLASH,
     b'[^-]+': OP_EXPECT_NODASH,
+    b'.+': OP_EXPECT_ALL,
 }
 
 OPCODES_REV = {v: k for k, v in OPCODES.items()}
@@ -43,68 +45,91 @@ cdef class Edge:
         self.child = new_child
         self.pattern = self.pattern[:len(prefix)]
 
-    cdef bytes compile(self):
+    cpdef bytes compile(self):
         cdef:
             unsigned int start = self.pattern.find(b'{')
             unsigned int end = self.pattern.find(b'}')
-            bytes segment = self.pattern[start:end+1]
+            bytes segment = self.pattern[start:end]
             list parts = segment.split(b':')
             bytes pattern
         if len(parts) == 2:
             pattern = parts[1]
         else:
             pattern = OPCODES_REV[OP_EXPECT_NOSLASH]
+        if pattern in OPCODES:
+            self.opcode = OPCODES[pattern]
         return pattern
 
-    cdef unsigned int match(self, const char *path):
+    cdef bytes match(self, const char *path, list params):
         cdef:
             unsigned int i = 0
-            unsigned int n = len(path)
-        if self.opcode == OP_EXPECT_NOSLASH:
-            for i in range(n):
+            unsigned int bound = len(self.pattern)
+            unsigned int path_len = len(path)
+            int start = self.pattern.find(b'{')
+            int end = self.pattern.find(b'}')
+            bytes rest
+        # Placeholder is not at the start (eg. "foo.{ext}").
+        if start > 0:
+            if not self.pattern[:start] == path[:start]:
+                return
+        if self.opcode == OP_EXPECT_ALL:
+            i = path_len
+        elif self.opcode == OP_EXPECT_NOSLASH:
+            for i in range(start, path_len):
                 if path[i] == ord(b'/'):
-                    return i
+                    break
             else:
                 if i:
-                    return n
+                    i = path_len
         elif self.opcode == OP_EXPECT_MORE_ALPHA:
-            for i in range(n):
+            for i in range(start, path_len):
                 if not chr(path[i]).isalpha():
-                    return i
+                    break
             else:
                 if i:
-                    return n
+                    i = path_len
         elif self.opcode == OP_EXPECT_MORE_DIGITS:
-            for i in range(n):
+            for i in range(start, path_len):
                 if not chr(path[i]).isdigit():
-                    return i
+                    break
             else:
                 if i:
-                    return n
+                    i = path_len
         elif self.opcode == OP_EXPECT_MORE_WORDS:
-            for i in range(n):
+            for i in range(start, path_len):
                 if not chr(path[i]).isdigit() and not chr(path[i]).isalpha():
-                    return i
+                    break
             else:
                 if i:
-                    return n
+                    i = path_len
         elif self.opcode == OP_EXPECT_NODASH:
-            for i in range(n):
+            for i in range(start, path_len):
                 if path[i] == ord(b'-'):
-                    return i
+                    break
             else:
                 if i:
-                    return n
+                    i = path_len
+        if i:
+            params.append(path[start:i])
+            if end+1 < bound:
+                # The placeholder is not at the end (eg. "{name}.json").
+                rest = self.pattern[end+1:]
+                if path[i:i+len(rest)] != rest:
+                    return
+                i += len(rest)
+            return path[:i]
 
 
 cdef class Route:
     cdef public bytes path
-    cdef list slugs
+    cdef public list slugs
     cdef public object payload
+    SLUGS = re.compile(b'{([^:}]+).*?}')
 
-    def __cinit__(self, path, payload):
+    def __cinit__(self, bytes path, object payload):
         self.path = path
-        self.payload = <object>payload
+        self.payload = payload
+        self.slugs = Route.SLUGS.findall(path)
 
 
 cdef class Node:
@@ -120,6 +145,7 @@ cdef class Node:
         if not self.routes:
             self.routes = []
         self.routes.append(Route(path, <object>payload))
+        self.endpoint = 1
 
     cdef Edge connect(self, child, pattern):
         cdef Edge edge
@@ -144,6 +170,9 @@ cdef class Node:
                 i = 0
                 for i in range(bound):
                     if path[i] != edge.pattern[i]:
+                        # Are we in the middle of a placeholder?
+                        if b'{' in path[:i] and not b'}' in path[:i]:
+                            i = path.find(b'{')
                         break
                 else:
                     i = bound
@@ -151,45 +180,60 @@ cdef class Node:
                     return edge, path[:i]
         return None, None
 
-    cdef Edge match(self, const char *path):
+    cdef Edge match(self, const char *path, list params):
         cdef:
-            unsigned int i, bound, matched
+            unsigned int i, bound
             unsigned int path_len = len(path)
+            unsigned int match_len
+            bytes match, rest
             Edge edge
 
         if self.edges:
             # OP match.
             if self.compare_type == NODE_COMPARE_OPCODE:
                 for edge in self.edges:
-                    matched = edge.match(path)
-                    if matched:
-                        # TODO params
-                        if len(path) == matched and edge.child.endpoint:
+                    match = edge.match(path, params)
+                    if match:
+                        match_len = len(match)
+                        if path_len == match_len and edge.child.endpoint:
                             return edge
-                        return edge.child.match(path[matched:])
+                        return edge.child.match(path[match_len:], params)
+            # Regex match.
+            if self.compiled:
+                matched = self.compiled.match(path)
+                if matched:
+                    params.append(matched.group(matched.lastindex))
+                    edge = self.edges[matched.lastindex-1]
+                    if matched.end() == path_len:
+                        if edge.child.endpoint:
+                            return edge
+                    else:
+                        return edge.child.match(path[matched.end():], params)
             # Simple match.
             for edge in self.edges:
                 if path.startswith(edge.pattern) or edge.pattern.startswith(path):
                     if len(path) == len(edge.pattern):
                         return edge
-                    return edge.child.match(path[len(edge.pattern):])
+                    return edge.child.match(path[len(edge.pattern):], params)
         return None
 
 
     cdef void compile(self):
         cdef:
             unsigned int count = 0
+            bool has_slug = False
             bytes pattern = b''
             unsigned int total = 0
             Edge edge
         if self.edges:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
-                if edge.opcode:
-                    count += 1
                 if edge.pattern.find(b'{') != -1:  # TODO validate {} pairs.
                     # compile "foo/{slug}" to "foo/[^/]+"
+                    has_slug = True
                     pattern += edge.compile()
+                    if edge.opcode:
+                        count += 1
                 else:
                     pattern += b'^(%b)' % edge.pattern
                 if i+1 < total:
@@ -198,10 +242,10 @@ cdef class Node:
             # if all edges use opcode, we should skip the combined_pattern.
             if count and count == total:
                 self.compare_type = NODE_COMPARE_OPCODE
-            else:
+            elif has_slug:
                 self.compare_type = NODE_COMPARE_PCRE
-            self.combined = pattern
-            self.compiled = re.compile(pattern)
+                self.combined = pattern
+                self.compiled = re.compile(pattern)
 
 
 cdef class Routes:
@@ -212,23 +256,36 @@ cdef class Routes:
         self.root = Node()
 
     def connect(self, bytes path, **payload):
-        self.insert(self.root, path, <void*>payload)
+        cdef Node node
+        node = self.insert(self.root, path, <void*>payload)
+        node.attach_route(path, <void*>payload)
         self.compile()
 
     def follow(self, bytes path):
         return self.match(self.root, path)
 
-    cdef Node match(self, Node node, bytes path):
-        edge = node.match(path)
+    cdef tuple match(self, Node node, bytes path):
+        cdef:
+            list values = []
+            dict params = {}
+            list slugs
+            unsigned int i, n
+        edge = node.match(path, values)
         if edge:
-            return edge.child
-        return None
+            # FIXME: more than 30% time lost in computing params.
+            slugs = edge.child.routes[0].slugs
+            n = len(slugs)
+            for i in range(n):
+                params[slugs[i]] = values[i]
+            return edge.child.payload, params
+        return None, None
 
     def dump(self):
         self._dump(self.root)
 
     cdef _dump(self, node, level=0):
         i = " " * level * 4
+        print(f'{i}(o)')
         if node.compare_type:
             print(f'{i}| compare_type:%d' % node.compare_type)
         if node.combined:
@@ -242,11 +299,12 @@ cdef class Routes:
             print(f'{i}| routes (%d):' % len(node.routes));
             for route in node.routes:
                 print(f'{i}    | path: %s' % route.path)
+                print(f'{i}    | slugs: %s' % route.slugs)
         if node.edges:
             for edge in node.edges:
-                print(f'{i}' + '|--- %s' % edge.pattern)
+                print(f'{i}' + '\--- %s' % edge.pattern)
                 if edge.opcode:
-                    print(f'{i}| opcode: %d' % edge.opcode)
+                    print(f'{i} |    opcode: %d' % edge.opcode)
                 if edge.child:
                     self._dump(edge.child, level + 1)
 
@@ -267,13 +325,11 @@ cdef class Routes:
             # common edge
             Edge edge = None
             bytes prefix
-
+            int bound, end, nb_slugs
 
         # If there is no path to insert at the node, we just increase the mount
         # point on the node and append the route.
         if not len(path):
-            tree.endpoint = 1
-            tree.attach_route(path, payload)
             return tree
 
         # TODO: ignore slugs
@@ -285,10 +341,12 @@ cdef class Routes:
             if nb_slugs > 1:
                 # Break into parts
                 child = Node()
+                # if bound == 0:
+                bound = path.find(b'{', bound + 1)  # Goto the next one.
                 node.connect(child, path[:bound])
                 return self.insert(child, path[bound:], payload)
             elif nb_slugs:
-                # slug does not starts at first char (eg. foo{slug})
+                # slug does not start at first char (eg. foo{slug})
                 if bound > 0:
                     child = Node()
                     node.connect(child, path[:bound])
@@ -296,28 +354,20 @@ cdef class Routes:
                     child = node
                 leaf = Node()
                 end = path.find(b'}')
-                edge = child.connect(leaf, path[bound:end+1])
-                pattern = edge.compile()
-                if pattern in OPCODES:
-                    edge.opcode = OPCODES[pattern]
-                if len(path) > end:
+                child.connect(leaf, path[bound:end+1])
+                if len(path) > end+1:
                     return self.insert(leaf, path[end+1:], payload)
                 leaf.payload = <object>payload
-                leaf.endpoint = 1
-                leaf.attach_route(path, payload)
                 return leaf
             else:
                 child = Node()
                 child.endpoint = 1
                 child.payload = <object>payload
                 edge = node.connect(child, path)
-                child.attach_route(path, payload)
                 return child
         elif len(prefix) == len(edge.pattern):
             if len(path) > len(prefix):
                 return self.insert(edge.child, path[len(prefix):], payload)
-            edge.child.attach_route(path, payload)
-            edge.child.endpoint = 1
             return edge.child
         elif len(prefix) < len(edge.pattern):
             edge.branch_at(prefix)
