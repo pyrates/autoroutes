@@ -7,3 +7,4 @@ dist/
 .cache/
 autoroutes.html
 cython_debug/
+*.prof
