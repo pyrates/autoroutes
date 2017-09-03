@@ -1,0 +1,9 @@
+__pycache__
+*.so
+*.c
+build/
+dist/
+*.egg-info
+.cache/
+autoroutes.html
+cython_debug/

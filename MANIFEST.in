@@ -1,0 +1,5 @@
+include README.md
+include requirements-dev.txt
+graft vendor/r3/
+graft vendor/r3/include/
+graft vendor/r3/3rdparty/
