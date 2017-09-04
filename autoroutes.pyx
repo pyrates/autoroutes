@@ -231,7 +231,7 @@ cdef class Node:
                 if edge.pattern.find(b'{') != -1:  # TODO validate {} pairs.
                     # compile "foo/{slug}" to "foo/[^/]+"
                     has_slug = True
-                    pattern += edge.compile()
+                    pattern += b'^(%b)' % edge.compile()
                     if edge.opcode:
                         count += 1
                 else:
