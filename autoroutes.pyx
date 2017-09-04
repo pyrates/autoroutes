@@ -133,8 +133,8 @@ cdef class Node:
     cdef public list edges
     cdef public bytes path
     cdef public unsigned int compare_type # pcre, opcode, string
-    cdef public object compiled
-    cdef public bytes combined
+    cdef public object regex
+    cdef public bytes pattern
     cdef public list slugs
     SLUGS = re.compile(b'{([^:}]+).*?}')
 
@@ -194,8 +194,8 @@ cdef class Node:
                             return edge
                         return edge.child.match(path[match_len:], params)
             # Regex match.
-            if self.compiled:
-                matched = self.compiled.match(path)
+            if self.regex:
+                matched = self.regex.match(path)
                 if matched:
                     params.append(matched.group(matched.lastindex))
                     edge = self.edges[matched.lastindex-1]
@@ -234,13 +234,13 @@ cdef class Node:
                 if i+1 < total:
                     pattern += b'|'
 
-            # if all edges use opcode, we should skip the combined_pattern.
+            # if all edges use opcode, we should skip the pattern_pattern.
             if count and count == total:
                 self.compare_type = NODE_COMPARE_OPCODE
             elif has_slug:
                 self.compare_type = NODE_COMPARE_PCRE
-                self.combined = pattern
-                self.compiled = re.compile(pattern)
+                self.pattern = pattern
+                self.regex = re.compile(pattern)
 
 
 cdef class Routes:
@@ -283,8 +283,8 @@ cdef class Routes:
         print(f'{i}(o)')
         if node.compare_type:
             print(f'{i}| compare_type:%d' % node.compare_type)
-        if node.combined:
-            print(f'{i}| regexp: %s' % node.combined)
+        if node.pattern:
+            print(f'{i}| regexp: %s' % node.pattern)
         if node.payload:
             print(f'{i}| data: %s' % node.payload)
         if node.path:
