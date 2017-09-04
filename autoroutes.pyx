@@ -7,6 +7,7 @@ import re
 class NoRoute(Exception):
     ...
 
+
 cdef enum:
     NODE_COMPARE_STR, NODE_COMPARE_PCRE, NODE_COMPARE_OPCODE
     OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
@@ -31,7 +32,6 @@ cdef class Edge:
     cdef public bytes pattern
     cdef public Node child
     cdef public unsigned int opcode
-    # unsigned int has_slug
 
     def __cinit__(self, pattern, child):
         self.pattern = pattern
@@ -212,7 +212,7 @@ cdef class Node:
             # Simple match.
             for edge in self.edges:
                 if path.startswith(edge.pattern) or edge.pattern.startswith(path):
-                    if len(path) == len(edge.pattern):
+                    if path_len == len(edge.pattern):
                         return edge
                     return edge.child.match(path[len(edge.pattern):], params)
         return None
