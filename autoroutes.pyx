@@ -12,7 +12,7 @@ cdef enum:
     NODE_COMPARE_STR, NODE_COMPARE_PCRE, NODE_COMPARE_OPCODE
     OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
 
-
+# TODO: support shortcuts {var:int}, {var:path}
 OPCODES = {
     b'\w+': OP_EXPECT_MORE_WORDS,
     b'[0-9a-z]+': OP_EXPECT_MORE_WORDS,
@@ -33,7 +33,7 @@ cdef class Edge:
     cdef public bytes pattern
     cdef int pattern_start
     cdef int pattern_end
-    cdef int pattern_len
+    cdef unsigned int pattern_len
     cdef bytes pattern_prefix
     cdef bytes pattern_suffix
     cdef unsigned int pattern_suffix_len
@@ -58,25 +58,28 @@ cdef class Edge:
         self.pattern_len = len(self.pattern)
         if self.pattern_start > 0:
             self.pattern_prefix = self.pattern[:self.pattern_start]
-        if self.pattern_end < self.pattern_len:
+        if self.pattern_end != -1 and self.pattern_end < self.pattern_len:
             self.pattern_suffix = self.pattern[self.pattern_end+1:]
             self.pattern_suffix_len = len(self.pattern_suffix)
         cdef:
-            bytes segment = self.pattern[self.pattern_start:self.pattern_end]
-            list parts = segment.split(b':')
-            bytes pattern
-        if len(parts) == 2:
-            pattern = parts[1]
+            list parts
+            bytes pattern, segment
+        if self.pattern_start != -1 and self.pattern_end != -1:
+            segment = self.pattern[self.pattern_start:self.pattern_end]
+            parts = segment.split(b':')
+            if len(parts) == 2:
+                pattern = parts[1]
+            else:
+                pattern = OPCODES_REV[OP_EXPECT_NOSLASH]
+            if pattern in OPCODES:
+                self.opcode = OPCODES[pattern]
         else:
-            pattern = OPCODES_REV[OP_EXPECT_NOSLASH]
-        if pattern in OPCODES:
-            self.opcode = OPCODES[pattern]
+            pattern = self.pattern
         return pattern
 
     cdef unsigned int match(self, const char *path, unsigned int path_len, list params):
         cdef:
             unsigned int i = 0
-            bytes rest
         # Placeholder is not at the start (eg. "foo.{ext}").
         if self.pattern_start > 0:
             if not self.pattern_prefix == path[:self.pattern_start]:
@@ -136,10 +139,12 @@ cdef class Node:
     cdef public object regex
     cdef public bytes pattern
     cdef public list slugs
+    cdef unsigned int slugs_count
     SLUGS = re.compile(b'{([^:}]+).*?}')
 
     cdef void attach_route(self, const char *path, object payload):
         self.slugs = Node.SLUGS.findall(path)
+        self.slugs_count = len(self.slugs)
         self.path = path
         self.payload = payload
 
@@ -178,11 +183,11 @@ cdef class Node:
 
     cdef Edge match(self, const char *path, list params):
         cdef:
-            unsigned int i, bound
             unsigned int path_len = len(path)
             unsigned int match_len
-            bytes match, rest
+            bytes match
             Edge edge
+            object matched
 
         if self.edges:
             # OP match.
@@ -194,7 +199,7 @@ cdef class Node:
                             return edge
                         return edge.child.match(path[match_len:], params)
             # Regex match.
-            if self.regex:
+            elif self.compare_type == NODE_COMPARE_PCRE:
                 matched = self.regex.match(path)
                 if matched:
                     params.append(matched.group(matched.lastindex))
@@ -205,11 +210,12 @@ cdef class Node:
                     else:
                         return edge.child.match(path[matched.end():], params)
             # Simple match.
-            for edge in self.edges:
-                if path.startswith(edge.pattern) or edge.pattern.startswith(path):
-                    if path_len == len(edge.pattern):
-                        return edge
-                    return edge.child.match(path[len(edge.pattern):], params)
+            elif self.compare_type == NODE_COMPARE_STR:
+                for edge in self.edges:
+                    if path.startswith(edge.pattern):
+                        if path_len == edge.pattern_len:
+                            return edge
+                        return edge.child.match(path[edge.pattern_len:], params)
         return None
 
 
@@ -223,15 +229,13 @@ cdef class Node:
         if self.edges:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
+                pattern += b'^(%b)' % edge.compile()
                 if edge.pattern.find(b'{') != -1:  # TODO validate {} pairs.
                     # compile "foo/{slug}" to "foo/[^/]+"
-                    pattern += b'^(%b)' % edge.compile()
                     if edge.opcode:
                         count += 1
                     else:
                         has_slug = True
-                else:
-                    pattern += b'^(%b)' % edge.pattern
                 if i+1 < total:
                     pattern += b'|'
 
@@ -242,6 +246,8 @@ cdef class Node:
                 self.compare_type = NODE_COMPARE_PCRE
                 self.pattern = pattern
                 self.regex = re.compile(pattern)
+            else:
+                self.compare_type = NODE_COMPARE_STR
 
 
 cdef class Routes:
@@ -258,20 +264,19 @@ cdef class Routes:
         self.compile()
 
     def follow(self, bytes path):
-        return self.match(self.root, path)
+        return self.match(path)
 
-    cdef tuple match(self, Node node, bytes path):
+    cdef tuple match(self, bytes path):
         cdef:
             list values = []
             dict params = {}
             list slugs
-            unsigned int i, n
-        edge = node.match(path, values)
+            unsigned int i
+        edge = self.root.match(path, values)
         if edge:
             # FIXME: more than 30% time lost in computing params.
             slugs = edge.child.slugs
-            n = len(slugs)
-            for i in range(n):
+            for i in range(edge.child.slugs_count):
                 params[slugs[i]] = values[i]
             return edge.child.payload, params
         return None, None
