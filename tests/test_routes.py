@@ -68,6 +68,13 @@ def test_follow_param_regex_can_consume_slash(routes):
         ({'something': 'x'}, {b'path': b'path/to/somewhere'})
 
 
+def test_follow_param_regex_can_be_complex(routes):
+    routes.connect(b'/foo/{path:(some|any)where}', something='x')
+    assert routes.follow(b'/foo/somewhere')[1] == {b'path': b'somewhere'}
+    assert routes.follow(b'/foo/anywhere')[1] == {b'path': b'anywhere'}
+    assert routes.follow(b'/foo/nowhere')[1] is None
+
+
 def test_follow_segment_can_mix_string_and_param(routes):
     routes.connect(b'/foo.{ext}', data='x')
     assert routes.follow(b'/foo.json')[1] == {b'ext': b'json'}

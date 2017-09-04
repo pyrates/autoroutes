@@ -225,10 +225,11 @@ cdef class Node:
             for i, edge in enumerate(self.edges):
                 if edge.pattern.find(b'{') != -1:  # TODO validate {} pairs.
                     # compile "foo/{slug}" to "foo/[^/]+"
-                    has_slug = True
                     pattern += b'^(%b)' % edge.compile()
                     if edge.opcode:
                         count += 1
+                    else:
+                        has_slug = True
                 else:
                     pattern += b'^(%b)' % edge.pattern
                 if i+1 < total:
