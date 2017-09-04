@@ -74,7 +74,6 @@ def test_follow_segment_can_mix_string_and_param(routes):
     assert routes.follow(b'/foo.txt')[1] == {b'ext': b'txt'}
 
 
-@pytest.mark.xfail
 def test_connect_can_be_overriden(routes):
     routes.connect(b'/foo/', data='old')
     routes.connect(b'/foo/', data='new')
