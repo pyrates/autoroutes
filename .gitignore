@@ -8,3 +8,5 @@ dist/
 autoroutes.html
 cython_debug/
 *.prof
+*.lprof
+tools/testing.py

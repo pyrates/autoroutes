@@ -1,7 +1,5 @@
 from timeit import timeit
-from autoroutes import Routes
-import faulthandler
-faulthandler.enable()
+from autoroutes import Routes, NoRoute
 
 PATHS = ['/user/', '/user/{id}', '/user/{id}/subpath', '/user/{id}/subpath2',
          '/boat/', '/boat/{id}', '/boat/{id}/subpath', '/boat/{id}/subpath2',
@@ -12,20 +10,17 @@ PATHS = ['/user/', '/user/{id}', '/user/{id}/subpath', '/user/{id}/subpath2',
 routes = Routes()
 for path in PATHS:
     routes.connect(path.encode(), GET='pouet')
-# routes.connect(path=b'/horse/22/subpath', GET='pouet')
-# routes.connect(path=b'/horse/{id}/subpath', GET='boudin')
-# routes.connect(b'/foo/{id}/bar/{sub}', something='x')
-# print(routes.follow(b'/foo/id/bar/sub'))
-routes.connect(path=b'/user/', GET='boudin')
-routes.connect(path=b'/horse/{id}/subpath', GET='boudin')
 
-routes.dump()
 node = routes.follow(b'/user/')
 print('/user/', node)
 node = routes.follow(b'/horse/22/subpath')
 print('/horse/22/subpath', node)
-node = routes.follow(b'/plane/')
-print('/plane/', node)
+try:
+    routes.follow(b'/plane/')
+except NoRoute:
+    print('/plane/ not found')
+else:
+    print('Oops, not raised')
 
 total = timeit("routes.follow(b'/user/')", globals=globals(), number=100000)
 print(f'First flat path:\n> {total}')
@@ -35,5 +30,6 @@ total = timeit("routes.follow(b'/horse/22/subpath')", globals=globals(),
 print(f'Middle path with placeholder:\n> {total}')
 
 
-total = timeit("routes.follow(b'/plane/')", globals=globals(), number=100000)
+total = timeit("try:\n routes.follow(b'/plane/')\nexcept NoRoute:\n pass",
+               globals=globals(), number=100000)
 print(f'Not found path:\n> {total}')

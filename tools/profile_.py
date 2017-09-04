@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 # Named profile_.py not to clash with cProfile doing bad absolute imports.
-# Add "# cython: profile=True" directive in autoroutes.pyx to profile,
-# remove autoroutes.c and autoroutes.xxx.so
+# Add "# cython: profile=True, linetrace=True, binding=True" directive in
+# autoroutes.pyx to profile, remove autoroutes.c and autoroutes.xxx.so
 
 from cProfile import runctx
 import pstats
