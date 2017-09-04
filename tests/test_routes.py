@@ -22,6 +22,12 @@ def test_follow_root(routes):
     assert routes.follow(b'/') == ({'something': 'x'}, {})
 
 
+def test_follow_unicode_routes(routes):
+    path = '/éèà'.encode(encoding='utf-8')
+    routes.connect(path, something='àô')
+    assert routes.follow(path) == ({'something': 'àô'}, {})
+
+
 def test_follow_unknown_path(routes):
     routes.connect(b'/foo/', data='x')
     assert routes.follow(b'/bar/') == (None, None)
@@ -87,4 +93,10 @@ def test_follow_accept_func_as_data(routes):
 def test_follow_accept_multiple_params(routes):
     routes.connect(b'/foo/{id}/bar/{sub}', something='x')
     assert routes.follow(b'/foo/id/bar/sub') == \
+        ({'something': 'x'}, {b'id': b'id', b'sub': b'sub'})
+
+
+def test_follow_accept_multiple_params_in_succession(routes):
+    routes.connect(b'/foo/{id}/{sub}', something='x')
+    assert routes.follow(b'/foo/id/sub') == \
         ({'something': 'x'}, {b'id': b'id', b'sub': b'sub'})
