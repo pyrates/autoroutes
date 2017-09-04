@@ -1,5 +1,5 @@
 # cython: language_level=3
-
+cimport cython
 from cpython cimport bool
 import re
 
@@ -28,8 +28,15 @@ OPCODES = {
 OPCODES_REV = {v: k for k, v in OPCODES.items()}
 
 
+@cython.final
 cdef class Edge:
     cdef public bytes pattern
+    cdef int pattern_start
+    cdef int pattern_end
+    cdef int pattern_len
+    cdef bytes pattern_prefix
+    cdef bytes pattern_suffix
+    cdef unsigned int pattern_suffix_len
     cdef public Node child
     cdef public unsigned int opcode
 
@@ -46,10 +53,16 @@ cdef class Edge:
         self.pattern = self.pattern[:len(prefix)]
 
     cpdef bytes compile(self):
+        self.pattern_start = self.pattern.find(b'{')  # Slow, but at compile it's ok.
+        self.pattern_end = self.pattern.find(b'}')
+        self.pattern_len = len(self.pattern)
+        if self.pattern_start > 0:
+            self.pattern_prefix = self.pattern[:self.pattern_start]
+        if self.pattern_end < self.pattern_len:
+            self.pattern_suffix = self.pattern[self.pattern_end+1:]
+            self.pattern_suffix_len = len(self.pattern_suffix)
         cdef:
-            unsigned int start = self.pattern.find(b'{')
-            unsigned int end = self.pattern.find(b'}')
-            bytes segment = self.pattern[start:end]
+            bytes segment = self.pattern[self.pattern_start:self.pattern_end]
             list parts = segment.split(b':')
             bytes pattern
         if len(parts) == 2:
@@ -60,64 +73,59 @@ cdef class Edge:
             self.opcode = OPCODES[pattern]
         return pattern
 
-    cdef bytes match(self, const char *path, list params):
+    cdef unsigned int match(self, const char *path, unsigned int path_len, list params):
         cdef:
             unsigned int i = 0
-            unsigned int bound = len(self.pattern)
-            unsigned int path_len = len(path)
-            int start = self.pattern.find(b'{')
-            int end = self.pattern.find(b'}')
             bytes rest
         # Placeholder is not at the start (eg. "foo.{ext}").
-        if start > 0:
-            if not self.pattern[:start] == path[:start]:
-                return
+        if self.pattern_start > 0:
+            if not self.pattern_prefix == path[:self.pattern_start]:
+                return 0
         if self.opcode == OP_EXPECT_ALL:
             i = path_len
         elif self.opcode == OP_EXPECT_NOSLASH:
-            for i in range(start, path_len):
+            for i in range(self.pattern_start, path_len):
                 if path[i] == ord(b'/'):
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_ALPHA:
-            for i in range(start, path_len):
+            for i in range(self.pattern_start, path_len):
                 if not chr(path[i]).isalpha():
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_DIGITS:
-            for i in range(start, path_len):
+            for i in range(self.pattern_start, path_len):
                 if not chr(path[i]).isdigit():
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_WORDS:
-            for i in range(start, path_len):
+            for i in range(self.pattern_start, path_len):
                 if not chr(path[i]).isdigit() and not chr(path[i]).isalpha():
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_NODASH:
-            for i in range(start, path_len):
+            for i in range(self.pattern_start, path_len):
                 if path[i] == ord(b'-'):
                     break
             else:
                 if i:
                     i = path_len
         if i:
-            params.append(path[start:i])
-            if end+1 < bound:
+            params.append(path[self.pattern_start:i])  # Slow.
+            if self.pattern_suffix and i < self.pattern_len:
                 # The placeholder is not at the end (eg. "{name}.json").
-                rest = self.pattern[end+1:]
-                if path[i:i+len(rest)] != rest:
-                    return
-                i += len(rest)
-            return path[:i]
+                if path[i:i+self.pattern_suffix_len] != self.pattern_suffix:
+                    return 0
+                i = i+self.pattern_suffix_len
+        return i
 
 
 cdef class Node:
@@ -180,9 +188,8 @@ cdef class Node:
             # OP match.
             if self.compare_type == NODE_COMPARE_OPCODE:
                 for edge in self.edges:
-                    match = edge.match(path, params)
-                    if match:
-                        match_len = len(match)
+                    match_len = edge.match(path, path_len, params)
+                    if match_len:
                         if path_len == match_len and edge.child.path:
                             return edge
                         return edge.child.match(path[match_len:], params)
