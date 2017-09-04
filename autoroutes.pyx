@@ -120,32 +120,20 @@ cdef class Edge:
             return path[:i]
 
 
-cdef class Route:
-    cdef public bytes path
-    cdef public list slugs
-    cdef public object payload
-    SLUGS = re.compile(b'{([^:}]+).*?}')
-
-    def __cinit__(self, bytes path, object payload):
-        self.path = path
-        self.payload = payload
-        self.slugs = Route.SLUGS.findall(path)
-
-
 cdef class Node:
     cdef public object payload
     cdef public list edges
-    cdef public list routes
+    cdef public bytes path
     cdef public unsigned int compare_type # pcre, opcode, string
-    cdef public unsigned int endpoint # should be zero for non-endpoint nodes
     cdef public object compiled
     cdef public bytes combined
+    cdef public list slugs
+    SLUGS = re.compile(b'{([^:}]+).*?}')
 
-    cdef void attach_route(self, const char *path, void *payload):
-        if not self.routes:
-            self.routes = []
-        self.routes.append(Route(path, <object>payload))
-        self.endpoint = 1
+    cdef void attach_route(self, const char *path, object payload):
+        self.slugs = Node.SLUGS.findall(path)
+        self.path = path
+        self.payload = payload
 
     cdef Edge connect(self, child, pattern):
         cdef Edge edge
@@ -195,7 +183,7 @@ cdef class Node:
                     match = edge.match(path, params)
                     if match:
                         match_len = len(match)
-                        if path_len == match_len and edge.child.endpoint:
+                        if path_len == match_len and edge.child.path:
                             return edge
                         return edge.child.match(path[match_len:], params)
             # Regex match.
@@ -205,7 +193,7 @@ cdef class Node:
                     params.append(matched.group(matched.lastindex))
                     edge = self.edges[matched.lastindex-1]
                     if matched.end() == path_len:
-                        if edge.child.endpoint:
+                        if edge.child.path:
                             return edge
                     else:
                         return edge.child.match(path[matched.end():], params)
@@ -257,8 +245,8 @@ cdef class Routes:
 
     def connect(self, bytes path, **payload):
         cdef Node node
-        node = self.insert(self.root, path, <void*>payload)
-        node.attach_route(path, <void*>payload)
+        node = self.insert(self.root, path)
+        node.attach_route(path, payload)
         self.compile()
 
     def follow(self, bytes path):
@@ -273,7 +261,7 @@ cdef class Routes:
         edge = node.match(path, values)
         if edge:
             # FIXME: more than 30% time lost in computing params.
-            slugs = edge.child.routes[0].slugs
+            slugs = edge.child.slugs
             n = len(slugs)
             for i in range(n):
                 params[slugs[i]] = values[i]
@@ -290,16 +278,11 @@ cdef class Routes:
             print(f'{i}| compare_type:%d' % node.compare_type)
         if node.combined:
             print(f'{i}| regexp: %s' % node.combined)
-        # print(f'{i}| endpoint: %d' % node.endpoint)
-
         if node.payload:
             print(f'{i}| data: %s' % node.payload)
-
-        if node.routes:
-            print(f'{i}| routes (%d):' % len(node.routes));
-            for route in node.routes:
-                print(f'{i}    | path: %s' % route.path)
-                print(f'{i}    | slugs: %s' % route.slugs)
+        if node.path:
+            print(f'{i}| path: %s' % node.path)
+            print(f'{i}| slugs: %s' % node.slugs)
         if node.edges:
             for edge in node.edges:
                 print(f'{i}' + '\--- %s' % edge.pattern)
@@ -319,7 +302,7 @@ cdef class Routes:
             for edge in node.edges:
                 self._compile(edge.child)
 
-    cdef Node insert(self, Node tree, const char *path, void *payload):
+    cdef Node insert(self, Node tree, const char *path):
         cdef:
             Node node = tree
             # common edge
@@ -344,7 +327,7 @@ cdef class Routes:
                 # if bound == 0:
                 bound = path.find(b'{', bound + 1)  # Goto the next one.
                 node.connect(child, path[:bound])
-                return self.insert(child, path[bound:], payload)
+                return self.insert(child, path[bound:])
             elif nb_slugs:
                 # slug does not start at first char (eg. foo{slug})
                 if bound > 0:
@@ -356,19 +339,16 @@ cdef class Routes:
                 end = path.find(b'}')
                 child.connect(leaf, path[bound:end+1])
                 if len(path) > end+1:
-                    return self.insert(leaf, path[end+1:], payload)
-                leaf.payload = <object>payload
+                    return self.insert(leaf, path[end+1:])
                 return leaf
             else:
                 child = Node()
-                child.endpoint = 1
-                child.payload = <object>payload
                 edge = node.connect(child, path)
                 return child
         elif len(prefix) == len(edge.pattern):
             if len(path) > len(prefix):
-                return self.insert(edge.child, path[len(prefix):], payload)
+                return self.insert(edge.child, path[len(prefix):])
             return edge.child
         elif len(prefix) < len(edge.pattern):
             edge.branch_at(prefix)
-            return self.insert(edge.child, path[len(prefix):], payload)
+            return self.insert(edge.child, path[len(prefix):])

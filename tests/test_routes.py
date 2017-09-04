@@ -90,13 +90,20 @@ def test_follow_accept_func_as_data(routes):
     assert routes.follow(b'/foo') == ({'handler': handler}, {})
 
 
-def test_follow_accept_multiple_params(routes):
+def test_follow_accepts_multiple_params(routes):
     routes.connect(b'/foo/{id}/bar/{sub}', something='x')
     assert routes.follow(b'/foo/id/bar/sub') == \
         ({'something': 'x'}, {b'id': b'id', b'sub': b'sub'})
 
 
-def test_follow_accept_multiple_params_in_succession(routes):
+def test_follow_accepts_multiple_params_in_succession(routes):
     routes.connect(b'/foo/{id}/{sub}', something='x')
     assert routes.follow(b'/foo/id/sub') == \
         ({'something': 'x'}, {b'id': b'id', b'sub': b'sub'})
+
+
+def test_follow_can_deal_with_conflicting_edges(routes):
+    routes.connect(b'/foo/{id}/path', something='x')
+    routes.connect(b'/foo/{id}/{sub}', something='y')
+    assert routes.follow(b'/foo/id/path') == \
+        ({'something': 'x'}, {b'id': b'id'})
