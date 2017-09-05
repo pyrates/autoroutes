@@ -3,7 +3,10 @@ from setuptools import setup, Extension
 setup(
     name='autoroutes',
     version='0.0.1',
-    description='Routes for speed.',
+    description='Routes for speed',
+    author='Yohan Boniface',
+    author_email='yohan.boniface@data.gouv.fr',
+    url='https://framagit.org/ybon/autoroutes',
     classifiers=[
         'License :: OSI Approved :: MIT License',
         'Intended Audience :: Developers',
@@ -14,8 +17,6 @@ setup(
         'Development Status :: 4 - Beta',
     ],
     platforms=['POSIX'],
-    author='Yohan Boniface',
-    author_email='yohan.boniface@data.gouv.fr',
     license='MIT',
     ext_modules=[
         Extension(

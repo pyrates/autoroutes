@@ -1,3 +1,5 @@
 include README.md
 include requirements-dev.txt
+include autoroutes.c
+include autoroutes.pyx
 recursive-exclude tools *

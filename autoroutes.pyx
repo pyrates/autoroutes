@@ -24,6 +24,7 @@ NOSLASH = b'[^/]+'
 OPCODES = {
     b'\w+': OP_EXPECT_MORE_WORDS,
     b'w': OP_EXPECT_MORE_WORDS,
+    b'word': OP_EXPECT_MORE_WORDS,
     b'[0-9a-z]+': OP_EXPECT_MORE_WORDS,
     b'[a-z0-9]+': OP_EXPECT_MORE_WORDS,
     b'[a-z]+': OP_EXPECT_MORE_ALPHA,
