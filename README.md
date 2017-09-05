@@ -48,6 +48,16 @@ Placeholders can appear anywhere in the path
     path/to/{name}.{ext}
 
 
+## Building from source
+
+    pip install cython
+    make compile
+
+
+## Tests
+
+    make test
+
 ## Acknowledgements
 
 This package has been first made as a Cython port of the [R3](https://github.com/c9s/r3/)
