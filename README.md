@@ -16,10 +16,11 @@ from autoroutes import Routes
 routes = Routes()
 
 # Register a new path
-routes.connect(b'path/to/resource/{id}')
+routes.connect(b'path/to/resource/{id}', something='value', anything='else')
 
 # Try to match a path
 routes.follow(b'path/to/resource/1234')
+> ({'something': 'value', 'anything': 'else'}, {b'id': b'1234'})
 ```
 
 ### Placeholders
