@@ -1,7 +1,7 @@
 
 import pytest
 
-from autoroutes import Routes
+from autoroutes import Routes, InvalidRoute
 
 
 @pytest.fixture
@@ -79,6 +79,11 @@ def test_follow_segment_can_mix_string_and_param(routes):
     routes.connect(b'/foo.{ext}', data='x')
     assert routes.follow(b'/foo.json')[1] == {b'ext': b'json'}
     assert routes.follow(b'/foo.txt')[1] == {b'ext': b'txt'}
+
+
+def test_invalid_placeholder(routes):
+    with pytest.raises(InvalidRoute):
+        routes.connect(b'/foo/{ext/', data='x')
 
 
 def test_connect_can_be_overriden(routes):

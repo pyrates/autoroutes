@@ -4,7 +4,15 @@ from cpython cimport bool
 import re
 
 
+# TODO: raise if not match.
+# This ends with slower code (because
+# of the try/except) so maybe it should
+# be optional.
 class NoRoute(Exception):
+    ...
+
+
+class InvalidRoute(Exception):
     ...
 
 
@@ -248,6 +256,8 @@ cdef class Routes:
 
     def connect(self, bytes path, **payload):
         cdef Node node
+        if path.count(b'{') != path.count(b'}'):
+            raise InvalidRoute('Unbalanced curly brackets for "{path}"'.format(path=path))
         node = self.insert(self.root, path)
         node.attach_route(path, payload)
         self.compile()
