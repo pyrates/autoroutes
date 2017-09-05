@@ -19,20 +19,26 @@ class InvalidRoute(Exception):
 cdef enum:
     OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
 
-# TODO: support shortcuts {var:int}, {var:path}
+NOSLASH = b'[^/]+'
+
 OPCODES = {
     b'\w+': OP_EXPECT_MORE_WORDS,
+    b'w': OP_EXPECT_MORE_WORDS,
     b'[0-9a-z]+': OP_EXPECT_MORE_WORDS,
     b'[a-z0-9]+': OP_EXPECT_MORE_WORDS,
     b'[a-z]+': OP_EXPECT_MORE_ALPHA,
     b'\d+': OP_EXPECT_MORE_DIGITS,
+    b'i': OP_EXPECT_MORE_DIGITS,
+    b'int': OP_EXPECT_MORE_DIGITS,
     b'[0-9]+': OP_EXPECT_MORE_DIGITS,
-    b'[^/]+': OP_EXPECT_NOSLASH,
+    NOSLASH: OP_EXPECT_NOSLASH,
+    b'string': OP_EXPECT_NOSLASH,
+    b's': OP_EXPECT_NOSLASH,
     b'[^-]+': OP_EXPECT_NODASH,
     b'.+': OP_EXPECT_ALL,
+    b'*': OP_EXPECT_ALL,
+    b'path': OP_EXPECT_ALL,
 }
-
-OPCODES_REV = {v: k for k, v in OPCODES.items()}
 
 
 @cython.final
@@ -77,7 +83,7 @@ cdef class Edge:
             if len(parts) == 2:
                 pattern = parts[1]
             else:
-                pattern = OPCODES_REV[OP_EXPECT_NOSLASH]
+                pattern = NOSLASH
             if pattern in OPCODES:
                 self.opcode = OPCODES[pattern]
         else:

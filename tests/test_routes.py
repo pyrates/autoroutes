@@ -75,6 +75,24 @@ def test_follow_param_regex_can_be_complex(routes):
     assert routes.follow(b'/foo/nowhere')[1] is None
 
 
+def test_follow_can_use_shortcut_types(routes):
+    routes.connect(b'/foo/{id:i}', something='x')
+    assert routes.follow(b'/foo/123')[1] == {b'id': b'123'}
+    assert routes.follow(b'/foo/abc')[1] is None
+
+
+def test_variable_type_no_dash(routes):
+    routes.connect(b'/foo/{name:[^-]+}', something='x')
+    assert routes.follow(b'/foo/abc')[1] == {b'name': b'abc'}
+    assert routes.follow(b'/foo/a-b-c')[1] is None
+
+
+def test_variable_type_word(routes):
+    routes.connect(b'/foo/{name:w}', something='x')
+    assert routes.follow(b'/foo/abc')[1] == {b'name': b'abc'}
+    assert routes.follow(b'/foo/a.b')[1] is None
+
+
 def test_follow_segment_can_mix_string_and_param(routes):
     routes.connect(b'/foo.{ext}', data='x')
     assert routes.follow(b'/foo.json')[1] == {b'ext': b'json'}
@@ -113,14 +131,14 @@ def test_follow_accepts_multiple_params_in_succession(routes):
         ({'something': 'x'}, {b'id': b'id', b'sub': b'sub'})
 
 
-def test_follow_can_deal_with_conflicting_edges(routes):
+def test_follow_can_deal_with_clashing_edges(routes):
     routes.connect(b'/foo/{id}/path', something='x')
     routes.connect(b'/foo/{id}/{sub}', something='y')
     assert routes.follow(b'/foo/id/path') == \
         ({'something': 'x'}, {b'id': b'id'})
 
 
-def test_follow_respesct_conflicting_edges_registration_order(routes):
+def test_follow_respesct_clashing_edges_registration_order(routes):
     routes.connect(b'/foo/{id}/{sub}', something='y')
     routes.connect(b'/foo/{id}/path', something='x')
     assert routes.follow(b'/foo/id/path') == \
