@@ -6,5 +6,6 @@ test:
 	py.test -v
 
 release:
+	make compile
 	rm -rf dist/ build/ *.egg-info
 	python setup.py sdist bdist_wheel upload

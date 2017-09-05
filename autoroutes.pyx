@@ -72,7 +72,7 @@ cdef class Edge:
         self.pattern_len = len(self.pattern)
         if self.pattern_start > 0:
             self.pattern_prefix = self.pattern[:self.pattern_start]
-        if self.pattern_end != -1 and self.pattern_end < self.pattern_len:
+        if self.pattern_end != -1 and <unsigned>self.pattern_end < self.pattern_len:
             self.pattern_suffix = self.pattern[self.pattern_end+1:]
             self.pattern_suffix_len = len(self.pattern_suffix)
         cdef:
@@ -325,7 +325,8 @@ cdef class Routes:
             # common edge
             Edge edge = None
             bytes prefix
-            int bound, end, nb_slugs
+            int bound, end
+            unsigned int nb_slugs
 
         # If there is no path to insert at the node, we just increase the mount
         # point on the node and append the route.
