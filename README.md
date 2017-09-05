@@ -30,17 +30,17 @@ will match any character but the slash ('/') (`[^/]+`).
 It's possible to control the placeholder type, either by:
 - using a named type: `w`/`word`, `i`/`int`, `*`/`path`, `s`/`string`:
 
-    path/to/{var:int}
+        path/to/{var:int}
 
 - using a simple (optimizable) pattern: `\w+`, `[0-9a-z]+`, `[a-z0-9]+`,
   `[a-z]+`, `\d+`, `[0-9]+`, `[^-]+`, `.+`
 
-    path/to/{var:\d+}
+        path/to/{var:\d+}
 
 - using a normal regex (slower; also note that regex containing curly braces is
   not yet supported)
 
-    path/to/{var:\d\d\d}
+        path/to/{var:\d\d\d}
 
 Placeholders can appear anywhere in the path
 
