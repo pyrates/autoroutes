@@ -1,9 +1,17 @@
+"""Routes for speed"""
+from pathlib import Path
 from setuptools import setup, Extension
+
+with Path(__file__).parent.joinpath('README.md').open(encoding='utf-8') as f:
+    long_description = f.read()
+
+VERSION = (0, 0, 1)
 
 setup(
     name='autoroutes',
-    version='0.0.1',
-    description='Routes for speed',
+    version='.'.join(map(str, VERSION)),
+    description=__doc__,
+    long_description=long_description,
     author='Yohan Boniface',
     author_email='yohan.boniface@data.gouv.fr',
     url='https://framagit.org/ybon/autoroutes',
