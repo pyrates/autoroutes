@@ -9,7 +9,6 @@ class NoRoute(Exception):
 
 
 cdef enum:
-    NODE_COMPARE_STR, NODE_COMPARE_PCRE, NODE_COMPARE_OPCODE
     OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
 
 # TODO: support shortcuts {var:int}, {var:path}
@@ -80,6 +79,11 @@ cdef class Edge:
     cdef unsigned int match(self, const char *path, unsigned int path_len, list params):
         cdef:
             unsigned int i = 0
+        if not self.opcode:
+            # Flat match.
+            if path.startswith(self.pattern):
+                return self.pattern_len
+            return 0
         # Placeholder is not at the start (eg. "foo.{ext}").
         if self.pattern_start > 0:
             if not self.pattern_prefix == path[:self.pattern_start]:
@@ -135,7 +139,6 @@ cdef class Node:
     cdef public object payload
     cdef public list edges
     cdef public bytes path
-    cdef public unsigned int compare_type # pcre, opcode, string
     cdef public object regex
     cdef public bytes pattern
     cdef public list slugs
@@ -190,16 +193,7 @@ cdef class Node:
             object matched
 
         if self.edges:
-            # OP match.
-            if self.compare_type == NODE_COMPARE_OPCODE:
-                for edge in self.edges:
-                    match_len = edge.match(path, path_len, params)
-                    if match_len:
-                        if path_len == match_len and edge.child.path:
-                            return edge
-                        return edge.child.match(path[match_len:], params)
-            # Regex match.
-            elif self.compare_type == NODE_COMPARE_PCRE:
+            if self.pattern:
                 matched = self.regex.match(path)
                 if matched:
                     params.append(matched.group(matched.lastindex))
@@ -209,13 +203,13 @@ cdef class Node:
                             return edge
                     else:
                         return edge.child.match(path[matched.end():], params)
-            # Simple match.
-            elif self.compare_type == NODE_COMPARE_STR:
+            else:
                 for edge in self.edges:
-                    if path.startswith(edge.pattern):
-                        if path_len == edge.pattern_len:
+                    match_len = edge.match(path, path_len, params)
+                    if match_len:
+                        if path_len == match_len and edge.child.path:
                             return edge
-                        return edge.child.match(path[edge.pattern_len:], params)
+                        return edge.child.match(path[match_len:], params)
         return None
 
 
@@ -229,9 +223,9 @@ cdef class Node:
         if self.edges:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
+                # compile "foo/{slug}" to "foo/[^/]+"
                 pattern += b'^(%b)' % edge.compile()
                 if edge.pattern.find(b'{') != -1:  # TODO validate {} pairs.
-                    # compile "foo/{slug}" to "foo/[^/]+"
                     if edge.opcode:
                         count += 1
                     else:
@@ -239,15 +233,10 @@ cdef class Node:
                 if i+1 < total:
                     pattern += b'|'
 
-            # if all edges use opcode, we should skip the pattern_pattern.
-            if count and count == total:
-                self.compare_type = NODE_COMPARE_OPCODE
-            elif has_slug:
-                self.compare_type = NODE_COMPARE_PCRE
+            # Run in regex mode only if we have a non optimizable pattern.
+            if has_slug:
                 self.pattern = pattern
                 self.regex = re.compile(pattern)
-            else:
-                self.compare_type = NODE_COMPARE_STR
 
 
 cdef class Routes:
@@ -287,8 +276,6 @@ cdef class Routes:
     cdef _dump(self, node, level=0):
         i = " " * level * 4
         print(f'{i}(o)')
-        if node.compare_type:
-            print(f'{i}| compare_type:%d' % node.compare_type)
         if node.pattern:
             print(f'{i}| regexp: %s' % node.pattern)
         if node.payload:

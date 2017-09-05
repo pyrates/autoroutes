@@ -113,3 +113,10 @@ def test_follow_can_deal_with_conflicting_edges(routes):
     routes.connect(b'/foo/{id}/{sub}', something='y')
     assert routes.follow(b'/foo/id/path') == \
         ({'something': 'x'}, {b'id': b'id'})
+
+
+def test_follow_respesct_conflicting_edges_registration_order(routes):
+    routes.connect(b'/foo/{id}/{sub}', something='y')
+    routes.connect(b'/foo/{id}/path', something='x')
+    assert routes.follow(b'/foo/id/path') == \
+        ({'something': 'y'}, {b'id': b'id', b'sub': b'path'})
