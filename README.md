@@ -53,6 +53,7 @@ Placeholders can appear anywhere in the path
 
     pip install cython
     make compile
+    python setup.py develop
 
 
 ## Tests

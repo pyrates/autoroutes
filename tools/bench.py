@@ -5,8 +5,7 @@ PATHS = ['user/', 'user/{id}', 'user/{id}/subpath', 'user/{id}/subpath2',
          'boat/', 'boat/{id}', 'boat/{id}/subpath', 'boat/{id}/subpath2',
          'horse/', 'horse/{id}', 'horse/{id}/subpath',
          'horse/{id}/subpath2', 'bicycle/', 'bicycle/{id}',
-         'bicycle/{id}/subpath2', 'bicycle/{id}/subpath',
-         '{foo}/{bar}/{baz}/{last}', 'api/{bar}/{baz}/{last}', 'api/id']
+         'bicycle/{id}/subpath2', 'bicycle/{id}/subpath']
 
 routes = Routes()
 for i, path in enumerate(PATHS):
@@ -16,8 +15,6 @@ node = routes.follow(b'user/')
 print('user/', node)
 node = routes.follow(b'horse/22/subpath')
 print('horse/22/subpath', node)
-node = routes.follow(b'api/id/baz/last')
-print('api/id/baz/last', node)
 try:
     routes.follow(b'plane/')
 except NoRoute:
