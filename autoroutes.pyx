@@ -58,13 +58,13 @@ cdef class Edge:
         self.pattern = pattern
         self.child = child
 
-    cdef branch_at(self, prefix):
+    cdef branch_at(self, unsigned int prefix_len):
         cdef:
             Node new_child = Node()
-            bytes rest = self.pattern[len(prefix):]
+            bytes rest = self.pattern[prefix_len:]
         new_child.connect(self.child, rest)
         self.child = new_child
-        self.pattern = self.pattern[:len(prefix)]
+        self.pattern = self.pattern[:prefix_len]
 
     cpdef bytes compile(self):
         self.pattern_start = self.pattern.find(b'{')  # Slow, but at compile it's ok.
@@ -333,40 +333,35 @@ cdef class Routes:
         if not len(path):
             return tree
 
-        # TODO: ignore slugs
         edge, prefix = node.common_prefix(path)
 
         if not edge:
             nb_slugs = path.count(b'{')
-            bound = path.find(b'{')
+            start = path.find(b'{')
             if nb_slugs > 1:
                 # Break into parts
                 child = Node()
-                # if bound == 0:
-                bound = path.find(b'{', bound + 1)  # Goto the next one.
-                node.connect(child, path[:bound])
-                return self.insert(child, path[bound:])
-            elif nb_slugs:
-                # slug does not start at first char (eg. foo{slug})
-                if bound > 0:
-                    child = Node()
-                    node.connect(child, path[:bound])
-                else:
-                    child = node
-                leaf = Node()
-                end = path.find(b'}')
-                child.connect(leaf, path[bound:end+1])
-                if len(path) > end+1:
-                    return self.insert(leaf, path[end+1:])
-                return leaf
+                start = path.find(b'{', start + 1)  # Goto the next one.
+                node.connect(child, path[:start])
+                return self.insert(child, path[start:])
             else:
                 child = Node()
                 edge = node.connect(child, path)
+                if nb_slugs:
+                    edge.compile()
+                    if not edge.opcode:  # Non optimizable, we may need to split.
+                        # slug does not start at first char (eg. foo{slug})
+                        if start > 0:
+                            edge.branch_at(start)
+                        end = path.find(b'}')
+                        # slug does not end pattern (eg. {slug}foo)
+                        if end+1 < len(path):
+                            edge.branch_at(end+1)
                 return child
         elif len(prefix) == len(edge.pattern):
             if len(path) > len(prefix):
                 return self.insert(edge.child, path[len(prefix):])
             return edge.child
         elif len(prefix) < len(edge.pattern):
-            edge.branch_at(prefix)
+            edge.branch_at(len(prefix))
             return self.insert(edge.child, path[len(prefix):])
