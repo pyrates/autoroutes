@@ -18,6 +18,7 @@ class InvalidRoute(Exception):
 
 cdef enum:
     OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
+    DASH = 45, SLASH = 47  # ord(b'-'), ord(b'/')
 
 NOSLASH = b'[^/]+'
 
@@ -107,7 +108,7 @@ cdef class Edge:
             i = path_len
         elif self.opcode == OP_EXPECT_NOSLASH:
             for i in range(self.pattern_start, path_len):
-                if path[i] == ord(b'/'):
+                if path[i] == SLASH:
                     break
             else:
                 if i:
@@ -135,7 +136,7 @@ cdef class Edge:
                     i = path_len
         elif self.opcode == OP_EXPECT_NODASH:
             for i in range(self.pattern_start, path_len):
-                if path[i] == ord(b'-'):
+                if path[i] == DASH:
                     break
             else:
                 if i:
