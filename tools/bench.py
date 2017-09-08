@@ -9,26 +9,26 @@ PATHS = ['user/', 'user/{id}', 'user/{id}/subpath', 'user/{id}/subpath2',
 
 routes = Routes()
 for i, path in enumerate(PATHS):
-    routes.connect(path.encode(), GET=i)
+    routes.connect(path, GET=i)
 
-node = routes.follow(b'user/')
+node = routes.follow('user/')
 print('user/', node)
-node = routes.follow(b'horse/22/subpath')
+node = routes.follow('horse/22/subpath')
 print('horse/22/subpath', node)
 try:
-    routes.follow(b'plane/')
+    routes.follow('plane/')
 except NoRoute:
     print('plane/ not found')
 else:
     print('Oops, not raised')
 
-total = timeit("routes.follow(b'user/')", globals=globals(), number=100000)
+total = timeit("routes.follow('user/')", globals=globals(), number=100000)
 print(f'First flat path:\n> {total}')
 
-total = timeit("routes.follow(b'horse/22/subpath')", globals=globals(),
+total = timeit("routes.follow('horse/22/subpath')", globals=globals(),
                number=100000)
 print(f'Middle path with placeholder:\n> {total}')
 
-total = timeit("try:\n routes.follow(b'plane/')\nexcept NoRoute:\n pass",
+total = timeit("try:\n routes.follow('plane/')\nexcept NoRoute:\n pass",
                globals=globals(), number=100000)
 print(f'Not found path:\n> {total}')

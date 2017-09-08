@@ -30,7 +30,7 @@ setup(
         Extension(
             'autoroutes',
             ['autoroutes.c'],
-            extra_compile_args=['-O2']
+            extra_compile_args=['-O3']
         )
     ],
     provides=['autoroutes'],

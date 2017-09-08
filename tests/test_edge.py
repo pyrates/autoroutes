@@ -4,10 +4,10 @@ from autoroutes import Edge, Node
 
 
 @pytest.mark.parametrize('pattern,expected', [
-    [b'{id}', b'[^/]+'],
-    [b'{id:\d+}', b'\d+'],
-    [b'{id:[abc]}', b'[abc]'],
-    [b'{id:.+}', b'.+'],
+    ['{id}', '[^/]+'],
+    ['{id:\d+}', '\d+'],
+    ['{id:[abc]}', '[abc]'],
+    ['{id:.+}', '.+'],
 ])
 def test_edge_compile(pattern, expected):
     assert Edge(pattern, Node()).compile() == expected

@@ -23,39 +23,38 @@ class InvalidRoute(Exception):
 
 cdef enum:
     OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
-    DASH = 45, SLASH = 47  # ord(b'-'), ord(b'/')
 
-NOSLASH = b'[^/]+'
+NOSLASH = '[^/]+'
 
 OPCODES = {
-    b'\w+': OP_EXPECT_MORE_WORDS,
-    b'w': OP_EXPECT_MORE_WORDS,
-    b'word': OP_EXPECT_MORE_WORDS,
-    b'[0-9a-z]+': OP_EXPECT_MORE_WORDS,
-    b'[a-z0-9]+': OP_EXPECT_MORE_WORDS,
-    b'[a-z]+': OP_EXPECT_MORE_ALPHA,
-    b'\d+': OP_EXPECT_MORE_DIGITS,
-    b'i': OP_EXPECT_MORE_DIGITS,
-    b'int': OP_EXPECT_MORE_DIGITS,
-    b'[0-9]+': OP_EXPECT_MORE_DIGITS,
+    '\w+': OP_EXPECT_MORE_WORDS,
+    'w': OP_EXPECT_MORE_WORDS,
+    'word': OP_EXPECT_MORE_WORDS,
+    '[0-9a-z]+': OP_EXPECT_MORE_WORDS,
+    '[a-z0-9]+': OP_EXPECT_MORE_WORDS,
+    '[a-z]+': OP_EXPECT_MORE_ALPHA,
+    '\d+': OP_EXPECT_MORE_DIGITS,
+    'i': OP_EXPECT_MORE_DIGITS,
+    'int': OP_EXPECT_MORE_DIGITS,
+    '[0-9]+': OP_EXPECT_MORE_DIGITS,
     NOSLASH: OP_EXPECT_NOSLASH,
-    b'string': OP_EXPECT_NOSLASH,
-    b's': OP_EXPECT_NOSLASH,
-    b'[^-]+': OP_EXPECT_NODASH,
-    b'.+': OP_EXPECT_ALL,
-    b'*': OP_EXPECT_ALL,
-    b'path': OP_EXPECT_ALL,
+    'string': OP_EXPECT_NOSLASH,
+    's': OP_EXPECT_NOSLASH,
+    '[^-]+': OP_EXPECT_NODASH,
+    '.+': OP_EXPECT_ALL,
+    '*': OP_EXPECT_ALL,
+    'path': OP_EXPECT_ALL,
 }
 
 
 @cython.final
 cdef class Edge:
-    cdef public bytes pattern
+    cdef public str pattern
     cdef int pattern_start
     cdef int pattern_end
     cdef unsigned int pattern_len
-    cdef bytes pattern_prefix
-    cdef bytes pattern_suffix
+    cdef str pattern_prefix
+    cdef str pattern_suffix
     cdef unsigned int pattern_suffix_len
     cdef public Node child
     cdef public unsigned int opcode
@@ -67,14 +66,14 @@ cdef class Edge:
     cdef branch_at(self, unsigned int prefix_len):
         cdef:
             Node new_child = Node()
-            bytes rest = self.pattern[prefix_len:]
+            str rest = self.pattern[prefix_len:]
         new_child.connect(self.child, rest)
         self.child = new_child
         self.pattern = self.pattern[:prefix_len]
 
-    cpdef bytes compile(self):
-        self.pattern_start = self.pattern.find(b'{')  # Slow, but at compile it's ok.
-        self.pattern_end = self.pattern.find(b'}')
+    cpdef str compile(self):
+        self.pattern_start = self.pattern.find('{')  # Slow, but at compile it's ok.
+        self.pattern_end = self.pattern.find('}')
         self.pattern_len = len(self.pattern)
         if self.pattern_start > 0:
             self.pattern_prefix = self.pattern[:self.pattern_start]
@@ -83,10 +82,10 @@ cdef class Edge:
             self.pattern_suffix_len = len(self.pattern_suffix)
         cdef:
             list parts
-            bytes pattern, segment
+            str pattern, segment
         if self.pattern_start != -1 and self.pattern_end != -1:
             segment = self.pattern[self.pattern_start:self.pattern_end]
-            parts = segment.split(b':')
+            parts = segment.split(':')
             if len(parts) == 2:
                 pattern = parts[1]
             else:
@@ -97,7 +96,7 @@ cdef class Edge:
             pattern = self.pattern
         return pattern
 
-    cdef unsigned int match(self, const char *path, unsigned int path_len, list params):
+    cdef unsigned int match(self, str path, unsigned int path_len, list params):
         cdef:
             unsigned int i = 0
         if not self.opcode:
@@ -113,42 +112,42 @@ cdef class Edge:
             i = path_len
         elif self.opcode == OP_EXPECT_NOSLASH:
             for i in range(self.pattern_start, path_len):
-                if path[i] == SLASH:
+                if path[i] == '/':
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_ALPHA:
             for i in range(self.pattern_start, path_len):
-                if not isalpha(path[i]):
+                if not path[i].isalpha():
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_DIGITS:
             for i in range(self.pattern_start, path_len):
-                if not isdigit(path[i]):
+                if not path[i].isdigit():
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_WORDS:
             for i in range(self.pattern_start, path_len):
-                if not isalnum(path[i]):
+                if not path[i].isalnum():
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_NODASH:
             for i in range(self.pattern_start, path_len):
-                if path[i] == DASH:
+                if path[i] == '-':
                     break
             else:
                 if i:
                     i = path_len
         if i:
             params.append(path[self.pattern_start:i])  # Slow.
-            if self.pattern_suffix and i < self.pattern_len:
+            if self.pattern_suffix_len and i < self.pattern_len:
                 # The placeholder is not at the end (eg. "{name}.json").
                 if path[i:i+self.pattern_suffix_len] != self.pattern_suffix:
                     return 0
@@ -159,14 +158,14 @@ cdef class Edge:
 cdef class Node:
     cdef public object payload
     cdef public list edges
-    cdef public bytes path
+    cdef public str path
     cdef public object regex
-    cdef public bytes pattern
+    cdef public str pattern
     cdef public list slugs
     cdef unsigned int slugs_count
-    SLUGS = re.compile(b'{([^:}]+).*?}')
+    SLUGS = re.compile('{([^:}]+).*?}')
 
-    cdef void attach_route(self, const char *path, object payload):
+    cdef void attach_route(self, str path, object payload):
         self.slugs = Node.SLUGS.findall(path)
         self.slugs_count = len(self.slugs)
         self.path = path
@@ -184,7 +183,7 @@ cdef class Node:
             self.edges.append(edge)
         return edge
 
-    cdef common_prefix(self, const char *path):
+    cdef common_prefix(self, str path):
         cdef:
             unsigned int i, bound
             unsigned int path_len = len(path)
@@ -196,8 +195,8 @@ cdef class Node:
                 for i in range(bound):
                     if path[i] != edge.pattern[i]:
                         # Are we in the middle of a placeholder?
-                        if b'{' in path[:i] and not b'}' in path[:i]:
-                            i = path.find(b'{')
+                        if '{' in path[:i] and not '}' in path[:i]:
+                            i = path.find('{')
                         break
                 else:
                     i = bound
@@ -205,11 +204,10 @@ cdef class Node:
                     return edge, path[:i]
         return None, None
 
-    cdef Edge match(self, const char *path, list params):
+    cdef Edge match(self, str path, list params):
         cdef:
             unsigned int path_len = len(path)
             unsigned int match_len
-            bytes match
             Edge edge
             object matched
 
@@ -238,21 +236,21 @@ cdef class Node:
         cdef:
             unsigned int count = 0
             bool has_slug = False
-            bytes pattern = b''
+            str pattern = ''
             unsigned int total = 0
             Edge edge
         if self.edges:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
                 # compile "foo/{slug}" to "foo/[^/]+"
-                pattern += b'^(%b)' % edge.compile()
-                if edge.pattern.find(b'{') != -1:  # TODO validate {} pairs.
+                pattern += '^({})'.format(edge.compile())
+                if edge.pattern.find('{') != -1:  # TODO validate {} pairs.
                     if edge.opcode:
                         count += 1
                     else:
                         has_slug = True
                 if i+1 < total:
-                    pattern += b'|'
+                    pattern += '|'
 
             # Run in regex mode only if we have a non optimizable pattern.
             if has_slug:
@@ -267,18 +265,18 @@ cdef class Routes:
     def __cinit__(self):
         self.root = Node()
 
-    def connect(self, bytes path, **payload):
+    def connect(self, str path, **payload):
         cdef Node node
-        if path.count(b'{') != path.count(b'}'):
+        if path.count('{') != path.count('}'):
             raise InvalidRoute('Unbalanced curly brackets for "{path}"'.format(path=path))
         node = self.insert(self.root, path)
         node.attach_route(path, payload)
         self.compile()
 
-    def follow(self, bytes path):
+    def follow(self, str path):
         return self.match(path)
 
-    cdef tuple match(self, bytes path):
+    cdef tuple match(self, str path):
         cdef:
             list values = []
             dict params = {}
@@ -286,7 +284,6 @@ cdef class Routes:
             unsigned int i
         edge = self.root.match(path, values)
         if edge:
-            # FIXME: more than 30% time lost in computing params.
             slugs = edge.child.slugs
             for i in range(edge.child.slugs_count):
                 params[slugs[i]] = values[i]
@@ -325,12 +322,12 @@ cdef class Routes:
             for edge in node.edges:
                 self._compile(edge.child)
 
-    cdef Node insert(self, Node tree, const char *path):
+    cdef Node insert(self, Node tree, str path):
         cdef:
             Node node = tree
             # common edge
             Edge edge = None
-            bytes prefix
+            str prefix
             int bound, end
             unsigned int nb_slugs
 
@@ -342,12 +339,12 @@ cdef class Routes:
         edge, prefix = node.common_prefix(path)
 
         if not edge:
-            nb_slugs = path.count(b'{')
-            start = path.find(b'{')
+            nb_slugs = path.count('{')
+            start = path.find('{')
             if nb_slugs > 1:
                 # Break into parts
                 child = Node()
-                start = path.find(b'{', start + 1)  # Goto the next one.
+                start = path.find('{', start + 1)  # Goto the next one.
                 node.connect(child, path[:start])
                 return self.insert(child, path[start:])
             else:
@@ -355,11 +352,11 @@ cdef class Routes:
                 edge = node.connect(child, path)
                 if nb_slugs:
                     edge.compile()
-                    if not edge.opcode:  # Non optimizable, we may need to split.
+                    if not edge.opcode:  # Non optimizable, split if prefix or suffix.
                         # slug does not start at first char (eg. foo{slug})
                         if start > 0:
                             edge.branch_at(start)
-                        end = path.find(b'}')
+                        end = path.find('}')
                         # slug does not end pattern (eg. {slug}foo)
                         if end+1 < len(path):
                             edge.branch_at(end+1)
