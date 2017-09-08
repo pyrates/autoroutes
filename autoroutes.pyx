@@ -3,6 +3,11 @@ cimport cython
 from cpython cimport bool
 import re
 
+cdef extern from "<ctype.h>" nogil:
+    int isalpha(int c)
+    int isdigit(int c)
+    int isalnum(int c)
+
 
 # TODO: raise if not match.
 # This ends with slower code (because
@@ -115,21 +120,21 @@ cdef class Edge:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_ALPHA:
             for i in range(self.pattern_start, path_len):
-                if not chr(path[i]).isalpha():
+                if not isalpha(path[i]):
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_DIGITS:
             for i in range(self.pattern_start, path_len):
-                if not chr(path[i]).isdigit():
+                if not isdigit(path[i]):
                     break
             else:
                 if i:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_WORDS:
             for i in range(self.pattern_start, path_len):
-                if not chr(path[i]).isalnum():
+                if not isalnum(path[i]):
                     break
             else:
                 if i:
