@@ -63,6 +63,9 @@ cdef class Edge:
         self.pattern = pattern
         self.child = child
 
+    def __repr__(self):
+        return '<Edge {}>'.format(self.pattern)
+
     cdef branch_at(self, unsigned int prefix_len):
         cdef:
             Node new_child = Node()
@@ -77,9 +80,14 @@ cdef class Edge:
         self.pattern_len = len(self.pattern)
         if self.pattern_start > 0:
             self.pattern_prefix = self.pattern[:self.pattern_start]
+        else:
+            self.pattern_prefix = None
         if self.pattern_end != -1 and <unsigned>self.pattern_end < self.pattern_len:
             self.pattern_suffix = self.pattern[self.pattern_end+1:]
             self.pattern_suffix_len = len(self.pattern_suffix)
+        else:
+            self.pattern_suffix = None
+            self.pattern_suffix_len = 0
         cdef:
             list parts
             str pattern, segment
@@ -94,6 +102,7 @@ cdef class Edge:
                 self.opcode = OPCODES[pattern]
         else:
             pattern = self.pattern
+            self.opcode = 0  # Reset, in case of branching.
         return pattern
 
     cdef unsigned int match(self, str path, unsigned int path_len, list params):

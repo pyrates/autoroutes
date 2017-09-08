@@ -110,6 +110,12 @@ def test_follow_segment_can_mix_string_and_param(routes):
     assert routes.follow('/foo.txt')[1] == {'ext': 'txt'}
 
 
+def test_follow_with_clashing_placeholders_of_different_types(routes):
+    routes.connect('horse/{id:i}/subpath', data='x')
+    routes.connect('horse/{id}/other', data='y')
+    assert routes.follow('horse/22/subpath') == ({'data': 'x'}, {'id': '22'})
+
+
 def test_invalid_placeholder(routes):
     with pytest.raises(InvalidRoute):
         routes.connect('/foo/{ext/', data='x')
