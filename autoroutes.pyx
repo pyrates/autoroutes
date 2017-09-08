@@ -129,7 +129,7 @@ cdef class Edge:
                     i = path_len
         elif self.opcode == OP_EXPECT_MORE_WORDS:
             for i in range(self.pattern_start, path_len):
-                if not chr(path[i]).isdigit() and not chr(path[i]).isalpha():
+                if not chr(path[i]).isalnum():
                     break
             else:
                 if i:
