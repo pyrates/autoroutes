@@ -22,28 +22,29 @@ class InvalidRoute(Exception):
 
 
 cdef enum:
-    OP_EXPECT_MORE_DIGITS = 1, OP_EXPECT_MORE_WORDS, OP_EXPECT_NOSLASH, OP_EXPECT_NODASH, OP_EXPECT_MORE_ALPHA, OP_EXPECT_ALL
+    MATCH_DIGIT = 1, MATCH_ALNUM, MATCH_NOSLASH, MATCH_NODASH, MATCH_ALPHA, MATCH_ALL, MATCH_REGEX
 
-NOSLASH = '[^/]+'
+NOSLASH = '[^/]+'  # Faster default, works for most common use case /{var}/.
 
-OPCODES = {
-    '\w+': OP_EXPECT_MORE_WORDS,
-    'w': OP_EXPECT_MORE_WORDS,
-    'word': OP_EXPECT_MORE_WORDS,
-    '[0-9a-z]+': OP_EXPECT_MORE_WORDS,
-    '[a-z0-9]+': OP_EXPECT_MORE_WORDS,
-    '[a-z]+': OP_EXPECT_MORE_ALPHA,
-    '\d+': OP_EXPECT_MORE_DIGITS,
-    'i': OP_EXPECT_MORE_DIGITS,
-    'int': OP_EXPECT_MORE_DIGITS,
-    '[0-9]+': OP_EXPECT_MORE_DIGITS,
-    NOSLASH: OP_EXPECT_NOSLASH,
-    'string': OP_EXPECT_NOSLASH,
-    's': OP_EXPECT_NOSLASH,
-    '[^-]+': OP_EXPECT_NODASH,
-    '.+': OP_EXPECT_ALL,
-    '*': OP_EXPECT_ALL,
-    'path': OP_EXPECT_ALL,
+
+MATCH_TYPES = {
+    '\w+': MATCH_ALNUM,
+    'w': MATCH_ALNUM,
+    'word': MATCH_ALNUM,
+    '[0-9a-z]+': MATCH_ALNUM,
+    '[a-z0-9]+': MATCH_ALNUM,
+    '[a-z]+': MATCH_ALPHA,
+    '\d+': MATCH_DIGIT,
+    'i': MATCH_DIGIT,
+    'int': MATCH_DIGIT,
+    '[0-9]+': MATCH_DIGIT,
+    NOSLASH: MATCH_NOSLASH,
+    'string': MATCH_NOSLASH,
+    's': MATCH_NOSLASH,
+    '[^-]+': MATCH_NODASH,
+    '.+': MATCH_ALL,
+    '*': MATCH_ALL,
+    'path': MATCH_ALL,
 }
 
 
@@ -57,7 +58,7 @@ cdef class Edge:
     cdef str pattern_suffix
     cdef unsigned int pattern_suffix_len
     cdef public Node child
-    cdef public unsigned int opcode
+    cdef public unsigned int match_type
 
     def __cinit__(self, pattern, child):
         self.pattern = pattern
@@ -98,17 +99,16 @@ cdef class Edge:
                 pattern = parts[1]
             else:
                 pattern = NOSLASH
-            if pattern in OPCODES:
-                self.opcode = OPCODES[pattern]
+            self.match_type = MATCH_TYPES.get(pattern, MATCH_REGEX)
         else:
             pattern = self.pattern
-            self.opcode = 0  # Reset, in case of branching.
+            self.match_type = 0  # Reset, in case of branching.
         return pattern
 
     cdef unsigned int match(self, str path, unsigned int path_len, list params):
         cdef:
             unsigned int i = 0
-        if not self.opcode:
+        if not self.match_type:
             # Flat match.
             if path.startswith(self.pattern):
                 return self.pattern_len
@@ -117,37 +117,37 @@ cdef class Edge:
         if self.pattern_start > 0:
             if not self.pattern_prefix == path[:self.pattern_start]:
                 return 0
-        if self.opcode == OP_EXPECT_ALL:
+        if self.match_type == MATCH_ALL:
             i = path_len
-        elif self.opcode == OP_EXPECT_NOSLASH:
+        elif self.match_type == MATCH_NOSLASH:
             for i in range(self.pattern_start, path_len):
                 if path[i] == '/':
                     break
             else:
                 if i:
                     i = path_len
-        elif self.opcode == OP_EXPECT_MORE_ALPHA:
+        elif self.match_type == MATCH_ALPHA:
             for i in range(self.pattern_start, path_len):
                 if not path[i].isalpha():
                     break
             else:
                 if i:
                     i = path_len
-        elif self.opcode == OP_EXPECT_MORE_DIGITS:
+        elif self.match_type == MATCH_DIGIT:
             for i in range(self.pattern_start, path_len):
                 if not path[i].isdigit():
                     break
             else:
                 if i:
                     i = path_len
-        elif self.opcode == OP_EXPECT_MORE_WORDS:
+        elif self.match_type == MATCH_ALNUM:
             for i in range(self.pattern_start, path_len):
                 if not path[i].isalnum():
                     break
             else:
                 if i:
                     i = path_len
-        elif self.opcode == OP_EXPECT_NODASH:
+        elif self.match_type == MATCH_NODASH:
             for i in range(self.pattern_start, path_len):
                 if path[i] == '-':
                     break
@@ -243,7 +243,6 @@ cdef class Node:
 
     cdef void compile(self):
         cdef:
-            unsigned int count = 0
             bool has_slug = False
             str pattern = ''
             unsigned int total = 0
@@ -251,12 +250,9 @@ cdef class Node:
         if self.edges:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
-                # compile "foo/{slug}" to "foo/[^/]+"
                 pattern += '^({})'.format(edge.compile())
-                if edge.pattern.find('{') != -1:  # TODO validate {} pairs.
-                    if edge.opcode:
-                        count += 1
-                    else:
+                if edge.pattern.find('{') != -1:
+                    if edge.match_type == MATCH_REGEX:
                         has_slug = True
                 if i+1 < total:
                     pattern += '|'
@@ -315,8 +311,8 @@ cdef class Routes:
         if node.edges:
             for edge in node.edges:
                 print(f'{i}' + '\--- %s' % edge.pattern)
-                if edge.opcode:
-                    print(f'{i} |    opcode: %d' % edge.opcode)
+                if edge.match_type:
+                    print(f'{i} |    match_type: %d' % edge.match_type)
                 if edge.child:
                     self._dump(edge.child, level + 1)
 
@@ -361,13 +357,11 @@ cdef class Routes:
                 edge = node.connect(child, path)
                 if nb_slugs:
                     edge.compile()
-                    if not edge.opcode:  # Non optimizable, split if prefix or suffix.
-                        # slug does not start at first char (eg. foo{slug})
-                        if start > 0:
+                    if edge.match_type == MATCH_REGEX:  # Non optimizable, split if pattern has prefix or suffix.
+                        if start > 0:  # slug does not start at first char (eg. foo{slug})
                             edge.branch_at(start)
                         end = path.find('}')
-                        # slug does not end pattern (eg. {slug}foo)
-                        if end+1 < len(path):
+                        if end+1 < len(path):  # slug does not end pattern (eg. {slug}foo)
                             edge.branch_at(end+1)
                 return child
         elif len(prefix) == len(edge.pattern):
