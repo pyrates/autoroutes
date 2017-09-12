@@ -60,6 +60,13 @@ Placeholders can appear anywhere in the path
 
     make test
 
+## Benchmark
+
+![](benchmark.png)
+
+See [Benchmark](https://framagit.org/ybon/autoroutes/wikis/benchmark) for more
+details.
+
 ## Acknowledgements
 
 This package has been first made as a Cython port of the [R3](https://github.com/c9s/r3/)
