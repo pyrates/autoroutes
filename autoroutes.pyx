@@ -165,7 +165,7 @@ cdef class Edge:
 
 
 cdef class Node:
-    cdef public object payload
+    cdef public dict payload
     cdef public list edges
     cdef public str path
     cdef public object regex
@@ -174,11 +174,14 @@ cdef class Node:
     cdef unsigned int slugs_count
     SLUGS = re.compile('{([^:}]+).*?}')
 
-    cdef void attach_route(self, str path, object payload):
+    def __cinit__(self):
+        self.payload = {}
+
+    cdef void attach_route(self, str path, dict payload):
         self.slugs = Node.SLUGS.findall(path)
         self.slugs_count = len(self.slugs)
         self.path = path
-        self.payload = payload
+        self.payload.update(payload)
 
     cdef Edge connect(self, child, pattern):
         cdef Edge edge

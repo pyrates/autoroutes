@@ -121,10 +121,10 @@ def test_invalid_placeholder(routes):
         routes.connect('/foo/{ext/', data='x')
 
 
-def test_connect_can_be_overriden(routes):
+def test_connect_can_be_updated(routes):
     routes.connect('/foo/', data='old')
-    routes.connect('/foo/', data='new')
-    assert routes.follow('/foo/') == ({'data': 'new'}, {})
+    routes.connect('/foo/', data='new', other='new')
+    assert routes.follow('/foo/') == ({'data': 'new', 'other': 'new'}, {})
 
 
 def test_follow_accept_func_as_data(routes):
