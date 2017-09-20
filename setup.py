@@ -5,7 +5,7 @@ from setuptools import setup, Extension
 with Path(__file__).parent.joinpath('README.md').open(encoding='utf-8') as f:
     long_description = f.read()
 
-VERSION = (0, 0, 3)
+VERSION = (0, 1, 0)
 
 setup(
     name='autoroutes',
@@ -14,7 +14,7 @@ setup(
     long_description=long_description,
     author='Yohan Boniface',
     author_email='yohan.boniface@data.gouv.fr',
-    url='https://framagit.org/ybon/autoroutes',
+    url='https://github.com/pyrates/autoroutes',
     classifiers=[
         'License :: OSI Approved :: MIT License',
         'Intended Audience :: Developers',
@@ -30,7 +30,7 @@ setup(
         Extension(
             'autoroutes',
             ['autoroutes.c'],
-            extra_compile_args=['-O3']
+            extra_compile_args=['-O3']  # Max optimization when compiling.
         )
     ],
     provides=['autoroutes'],

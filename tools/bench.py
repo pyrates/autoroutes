@@ -1,5 +1,5 @@
 from timeit import timeit
-from autoroutes import Routes, NoRoute
+from autoroutes import Routes
 
 PATHS = ['user/', 'user/{id}', 'user/{id}/subpath', 'user/{id}/subpath2',
          'boat/', 'boat/{id}', 'boat/{id}/subpath', 'boat/{id}/subpath2',
@@ -9,26 +9,22 @@ PATHS = ['user/', 'user/{id}', 'user/{id}/subpath', 'user/{id}/subpath2',
 
 routes = Routes()
 for i, path in enumerate(PATHS):
-    routes.connect(path, GET=i)
+    routes.add(path, GET=i)
 
-node = routes.follow('user/')
+node = routes.match('user/')
 print('user/', node)
-node = routes.follow('horse/22/subpath')
+node = routes.match('horse/22/subpath')
 print('horse/22/subpath', node)
-try:
-    routes.follow('plane/')
-except NoRoute:
-    print('plane/ not found')
-else:
-    print('Oops, not raised')
+node = routes.match('plane/')
+print(node)
 
-total = timeit("routes.follow('user/')", globals=globals(), number=100000)
+total = timeit("routes.match('user/')", globals=globals(), number=100000)
 print(f'First flat path:\n> {total}')
 
-total = timeit("routes.follow('horse/22/subpath')", globals=globals(),
-               number=100000)
+total = timeit("routes.match('horse/22/subpath')",
+               globals=globals(), number=100000)
 print(f'Middle path with placeholder:\n> {total}')
 
-total = timeit("try:\n routes.follow('plane/')\nexcept NoRoute:\n pass",
+total = timeit("routes.match('plane/')",
                globals=globals(), number=100000)
 print(f'Not found path:\n> {total}')

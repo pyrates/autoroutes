@@ -21,10 +21,10 @@ PATHS = ['/user/', '/user/{id}', '/user/{id}/subpath', '/user/{id}/subpath2',
 
 routes = Routes()
 for path in PATHS:
-    routes.connect(path.encode(), data='data')
+    routes.add(path, data='data')
 
 
-runctx('for i in range(100000):\n routes.follow(b"/horse/22/subpath")',
+runctx('for i in range(100000):\n routes.match("/horse/22/subpath")',
        globals(), locals(), 'Profile.prof')
 
 s = pstats.Stats('Profile.prof')

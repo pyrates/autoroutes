@@ -16,27 +16,24 @@ from autoroutes import Routes
 routes = Routes()
 
 # Register a new path
-routes.connect('path/to/resource/{id}', something='value', anything='else')
+routes.add('path/to/resource/{id}', something='value', anything='else')
 
 # Try to match a path
-routes.follow('path/to/resource/1234')
+routes.match('path/to/resource/1234')
 > ({'something': 'value', 'anything': 'else'}, {'id': '1234'})
 ```
 
 ### Placeholders
 
 Placeholders are defined by a curly brace pair: `path/{var}`. By default, this
-will match any character but the slash ('/') (`[^/]+`).
+will match any character but the slash ('/').
 
 It's possible to control the placeholder type, either by:
-- using a named type: `w`/`word`, `i`/`int`, `*`/`path`, `s`/`string`:
+- using a named type: `alnum`, `digit`, `alpha`, `path` (matches everything),
+  `string` (default):
 
-        path/to/{var:int}
-
-- using a simple (optimizable) pattern: `\w+`, `[0-9a-z]+`, `[a-z0-9]+`,
-  `[a-z]+`, `\d+`, `[0-9]+`, `[^-]+`, `.+`
-
-        path/to/{var:\d+}
+        path/to/{var:digit}
+        path/to/{var:string}  # Same as path/to/{var}
 
 - using a normal regex (slower; also note that regex containing curly braces is
   not yet supported)

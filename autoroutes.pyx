@@ -3,19 +3,6 @@ cimport cython
 from cpython cimport bool
 import re
 
-cdef extern from "<ctype.h>" nogil:
-    int isalpha(int c)
-    int isdigit(int c)
-    int isalnum(int c)
-
-
-# TODO: raise if not match.
-# This ends with slower code (because
-# of the try/except) so maybe it should
-# be optional.
-class NoRoute(Exception):
-    ...
-
 
 class InvalidRoute(Exception):
     ...
@@ -24,26 +11,13 @@ class InvalidRoute(Exception):
 cdef enum:
     MATCH_DIGIT = 1, MATCH_ALNUM, MATCH_NOSLASH, MATCH_NODASH, MATCH_ALPHA, MATCH_ALL, MATCH_REGEX
 
-NOSLASH = '[^/]+'  # Faster default, works for most common use case /{var}/.
-
+DEFAULT_MATCH_TYPE = 'string'  # Faster default, works for most common use case /{var}/.
 
 MATCH_TYPES = {
-    '\w+': MATCH_ALNUM,
-    'w': MATCH_ALNUM,
-    'word': MATCH_ALNUM,
-    '[0-9a-z]+': MATCH_ALNUM,
-    '[a-z0-9]+': MATCH_ALNUM,
-    '[a-z]+': MATCH_ALPHA,
-    '\d+': MATCH_DIGIT,
-    'i': MATCH_DIGIT,
-    'int': MATCH_DIGIT,
-    '[0-9]+': MATCH_DIGIT,
-    NOSLASH: MATCH_NOSLASH,
-    'string': MATCH_NOSLASH,
-    's': MATCH_NOSLASH,
-    '[^-]+': MATCH_NODASH,
-    '.+': MATCH_ALL,
-    '*': MATCH_ALL,
+    'alnum': MATCH_ALNUM,
+    'alpha': MATCH_ALPHA,
+    'digit': MATCH_DIGIT,
+    DEFAULT_MATCH_TYPE: MATCH_NOSLASH,
     'path': MATCH_ALL,
 }
 
@@ -98,7 +72,7 @@ cdef class Edge:
             if len(parts) == 2:
                 pattern = parts[1]
             else:
-                pattern = NOSLASH
+                pattern = DEFAULT_MATCH_TYPE
             self.match_type = MATCH_TYPES.get(pattern, MATCH_REGEX)
         else:
             pattern = self.pattern
@@ -273,18 +247,18 @@ cdef class Routes:
     def __cinit__(self):
         self.root = Node()
 
-    def connect(self, str path, **payload):
+    def add(self, str path, **payload):
         cdef Node node
         if path.count('{') != path.count('}'):
             raise InvalidRoute('Unbalanced curly brackets for "{path}"'.format(path=path))
         node = self.insert(self.root, path)
         node.attach_route(path, payload)
-        self.compile()
+        self.compile(self.root)
 
-    def follow(self, str path):
-        return self.match(path)
+    def match(self, str path):
+        return self._match(path)
 
-    cdef tuple match(self, str path):
+    cdef tuple _match(self, str path):
         cdef:
             list values = []
             dict params = {}
@@ -319,16 +293,13 @@ cdef class Routes:
                 if edge.child:
                     self._dump(edge.child, level + 1)
 
-    def compile(self):
-        self._compile(self.root)
-
-    cdef _compile(self, Node node):
+    cdef compile(self, Node node):
         cdef:
             Edge edge
         node.compile()
         if node.edges:
             for edge in node.edges:
-                self._compile(edge.child)
+                self.compile(edge.child)
 
     cdef Node insert(self, Node tree, str path):
         cdef:
