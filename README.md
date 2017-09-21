@@ -15,10 +15,10 @@ Routes for speed.
 from autoroutes import Routes
 routes = Routes()
 
-# Register a new path
+# Register a new route
 routes.add('path/to/resource/{id}', something='value', anything='else')
 
-# Try to match a path
+# Try to match a route
 routes.match('path/to/resource/1234')
 > ({'something': 'value', 'anything': 'else'}, {'id': '1234'})
 ```
@@ -61,7 +61,7 @@ Placeholders can appear anywhere in the path
 
 ![](benchmark.png)
 
-See [Benchmark](https://framagit.org/ybon/autoroutes/wikis/benchmark) for more
+See [Benchmark](https://github.com/pyrates/autoroutes/wiki/Benchmark) for more
 details.
 
 ## Acknowledgements
