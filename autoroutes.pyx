@@ -33,7 +33,7 @@ cdef int common_root_len(string1, string2):
     cdef unsigned int bound, i
     bound = min(len(string1), len(string2))
     for i in range(bound):
-        if path[i] != self.pattern[i]:
+        if string1[i] != string2[i]:
             return i
     else:
         return bound
@@ -68,63 +68,41 @@ cdef class Edge:
         new_child.compile()
         self.pattern = self.pattern[:prefix_len]
 
-    cpdef Node join(self, str path):
+    cdef Node join(self, str path):
         cdef:
-            unsigned int common_len
-            unsigned int path_len = len(path)
+            unsigned int local_index, candidate_index
             Edge candidate = Edge(path, None)
         candidate.compile()
-        if self.pattern_prefix_len and candidate.pattern_prefix_len:
-            common_len = common_root_len(self.pattern_prefix, candidate.pattern_prefix)
+        local_index, candidate_index = self.compare(candidate)
+        del candidate
+        if not local_index:
+            return None
+        if local_index < self.pattern_len:
+            self.branch_at(local_index)
+        if candidate_index < len(path):
+            return self.child.insert(path[candidate_index:])
+        return self.child
+
+    cdef tuple compare(self, Edge other):
+        cdef unsigned int common_len
+        if self.pattern_prefix_len and other.pattern_prefix_len:
+            common_len = common_root_len(self.pattern_prefix, other.pattern_prefix)
             if not common_len:  # Nothing common.
-                return None
-            elif common_len < self.pattern_prefix_len:  # Remote prefix is consumed but not self.
-                self.branch_at(common_len)
-                return self.child.insert(path[common_len:])
-            elif common_len < candidate.pattern_prefix_len:  # Self prefix is consumed but not remote.
-                if self.match_type:
-                    self.branch_at(common_len)
-                return self.child.insert(path[common_len:])
-            # else prefix are equal and fully consumed.
-        elif self.pattern_prefix_len or candidate.pattern_prefix_len:
-            return None
+                return 0, 0
+            # At least one prefix is not finished, no need to compare further.
+            elif common_len < self.pattern_prefix_len or common_len < other.pattern_prefix_len:
+                return common_len, common_len
+        elif self.pattern_prefix_len or other.pattern_prefix_len:
+            return 0, 0
         # We now know prefix are either none or equal.
-        if not self.match_type and not candidate.match_type:
-            # No placeholder, thus no suffix, we're done.
-            if self.pattern_prefix_len:
-                return self.child
-            return None
-        elif not self.match_type:
-            return self.child.insert(path[self.pattern_prefix_len:])
-        elif not candidate.match_type or self.match_type == MATCH_REGEX or self.match_type != candidate.match_type:
-            # We cannot merge placeholders.
-            if self.pattern_prefix_len:
-                self.branch_at(self.pattern_start)
-                return self.child.insert(path[candidate.pattern_prefix_len:])
-            else:  # Nothing matched, abort.
-                return None
-        else:  # match types are mergeable, let's see if we should also deal with suffix.
-            if not self.pattern_suffix and not candidate.pattern_suffix:
-                return self.child
-            elif not self.pattern_suffix:
-                return self.child.insert(path[candidate.pattern_end:])
-            elif not candidate.pattern_suffix:
-                self.branch_at(self.pattern_end)
-                return self.child.insert(path[candidate.pattern_end:])
-            else:
-                common_len = common_root_len(self.pattern_suffix, candidate.pattern_suffix)
-                if not common_len:  # Nothing common in the suffix.
-                    return self.child.insert(path[candidate.pattern_end+1:])
-                elif common_len == self.pattern_suffix_len == candidate.pattern_suffix_len:
-                    return self.child
-                elif common_len < self.pattern_suffix_len:  # Remaining self suffix.
-                    self.branch_at(self.pattern_end+common_len+1)
-                    if candidate.pattern_end+common_len+1 < candidate.pattern_len:
-                        return self.child.insert(path[candidate.pattern_end+common_len+1:])
-                    return self.child
-                elif common_len < candidate.pattern_suffix_len:  # Remaining candidate suffix.
-                    return self.child.insert(path[candidate.pattern_end+common_len+1:])
-                # else:  # The whole self suffix is consumed and both are equal.
+        if not self.match_type or self.match_type == MATCH_REGEX or self.match_type != other.match_type:
+            return self.pattern_prefix_len, other.pattern_prefix_len
+        # We now know match types are mergeable, let's see if we should also deal with suffix.
+        if self.pattern_suffix and other.pattern_suffix:
+            common_len = common_root_len(self.pattern_suffix, other.pattern_suffix)
+            if common_len:
+                return self.pattern_end + common_len + 1, other.pattern_end + common_len + 1
+        return self.pattern_end + 1, other.pattern_end + 1
 
     cpdef str compile(self):
         self.pattern_start = self.pattern.find('{')  # Slow, but at compile it's ok.
@@ -143,14 +121,13 @@ cdef class Edge:
             str pattern, segment
             unsigned int match_type
         if self.pattern_start != -1 and self.pattern_end != -1:
-            pattern, self.match_type = Edge.extract_pattern(self.pattern[self.pattern_start:self.pattern_end])
+            pattern, self.match_type = self.extract_pattern(self.pattern[self.pattern_start:self.pattern_end])
         else:
             pattern = self.pattern
             self.match_type = 0  # Reset, in case of branching.
         return pattern
 
-    @staticmethod
-    cdef tuple extract_pattern(str segment):
+    cdef tuple extract_pattern(self, str segment):
         cdef:
             list parts
             unsigned int match_type
@@ -217,7 +194,7 @@ cdef class Edge:
                 # The placeholder is not at the end (eg. "{name}.json").
                 if path[i:i+self.pattern_suffix_len] != self.pattern_suffix:
                     return 0
-                i = i+self.pattern_suffix_len
+                i = i + self.pattern_suffix_len
         return i
 
 
@@ -302,7 +279,7 @@ cdef class Node:
                 if edge.pattern.find('{') != -1:
                     if edge.match_type == MATCH_REGEX:
                         has_slug = True
-                if i+1 < total:
+                if i + 1 < total:
                     pattern += '|'
 
             # Run in regex mode only if we have a non optimizable pattern.
@@ -313,26 +290,15 @@ cdef class Node:
     cdef Node insert(self, str path):
         cdef:
             Node node
-            # common edge
             Edge edge = None
             str prefix
             int bound, end
             unsigned int nb_slugs
 
-        print(f'Node.insert "{path}"')
-        # If there is no path to insert at the node, we just increase the mount
-        # point on the node and append the route.
-        if not len(path):
-            print('No path, aborting insert')
-            return self
-
         node = self.common_edge(path)
 
         if node:
-            print('Found a common edge', path, node)
             return node
-
-        print('No node found, create a new one')
 
         nb_slugs = path.count('{')
         start = path.find('{')
@@ -351,8 +317,8 @@ cdef class Node:
                     if start > 0:  # slug does not start at first char (eg. foo{slug})
                         edge.branch_at(start)
                     end = path.find('}')
-                    if end+1 < len(path):  # slug does not end pattern (eg. {slug}foo)
-                        edge.branch_at(end+1)
+                    if end + 1 < len(path):  # slug does not end pattern (eg. {slug}foo)
+                        edge.branch_at(end + 1)
             return child
 
 
