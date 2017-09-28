@@ -1,15 +1,7 @@
 
 import pytest
 
-from autoroutes import Routes, InvalidRoute
-
-
-@pytest.fixture
-def routes():
-    routes_ = Routes()
-    yield routes_
-    routes_.dump()  # Will display only in case of failure.
-    del routes_
+from autoroutes import InvalidRoute
 
 
 def test_simple_follow(routes):
@@ -153,3 +145,48 @@ def test_add_respesct_clashing_edges_registration_order(routes):
     routes.add('/foo/{id}/path', something='x')
     assert routes.match('/foo/id/path') == \
         ({'something': 'y'}, {'id': 'id', 'sub': 'path'})
+
+
+def test_add_can_deal_with_clashing_vars_of_same_type(routes):
+    routes.add('/foo/{category}/{id:digit}.csv', something='c')
+    routes.add('/foo/{category}/{id:alnum}.txt', something='x')
+    routes.add('/foo/{category}/{id:alnum}.json', something='j')
+    assert routes.match('/foo/cat/id.txt') == (
+        {'something': 'x'}, {'id': 'id', 'category': 'cat'})
+    assert routes.match('/foo/cat/id.json') == (
+        {'something': 'j'}, {'id': 'id', 'category': 'cat'})
+    assert routes.match('/foo/cat/id.csv') == (None, None)
+    assert routes.match('/foo/cat/123.csv') == (
+        {'something': 'c'}, {'id': '123', 'category': 'cat'})
+
+
+def test_add_deals_with_clashing_vars_of_same_type_and_different_names(routes):
+    routes.add('/foo/{foo}/{id:digit}.csv', something='c')
+    routes.add('/foo/{bar}/{id:alnum}.txt', something='x')
+    routes.add('/foo/{baz}/{id:alnum}.json', something='j')
+    assert routes.match('/foo/cat/id.txt') == (
+        {'something': 'x'}, {'id': 'id', 'bar': 'cat'})
+    assert routes.match('/foo/cat/id.json') == (
+        {'something': 'j'}, {'id': 'id', 'baz': 'cat'})
+    assert routes.match('/foo/cat/id.csv') == (None, None)
+    assert routes.match('/foo/cat/123.csv') == (
+        {'something': 'c'}, {'id': '123', 'foo': 'cat'})
+
+
+def test_add_deals_with_multiple_clashing_vars(routes):
+    routes.add('/{names}/{z:digit}/{x:digit}/{y:digit}.pbf', foo='pbf')
+    routes.add('/{namespace}/{names}/{z:digit}/{x:digit}/{y:digit}.pbf',
+               foo='npbf')
+    routes.add('/{names}/{z:digit}/{x:digit}/{y:digit}.mvt', foo='mvt')
+    routes.add('/{namespace}/{names}/{z:digit}/{x:digit}/{y:digit}.mvt',
+               foo='nmvt')
+    assert routes.match('/default/mylayer/0/0/0.pbf') == (
+        {'foo': 'npbf'}, {'names': 'mylayer', 'namespace': 'default', 'x': '0',
+                          'y': '0', 'z': '0'})
+    assert routes.match('/default/mylayer/0/0/0.mvt') == (
+        {'foo': 'nmvt'}, {'names': 'mylayer', 'namespace': 'default', 'x': '0',
+                          'y': '0', 'z': '0'})
+    assert routes.match('/mylayer/0/0/0.pbf') == (
+        {'foo': 'pbf'}, {'names': 'mylayer', 'x': '0', 'y': '0', 'z': '0'})
+    assert routes.match('/mylayer/0/0/0.mvt') == (
+        {'foo': 'mvt'}, {'names': 'mylayer', 'x': '0', 'y': '0', 'z': '0'})

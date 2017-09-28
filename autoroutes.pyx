@@ -20,6 +20,23 @@ MATCH_TYPES = {
     DEFAULT_MATCH_TYPE: MATCH_NOSLASH,
     'path': MATCH_ALL,
 }
+PATTERNS = {
+    MATCH_ALL: '.+',
+    MATCH_ALNUM: '\w+',
+    MATCH_ALPHA: '[a-zA-Z]+',
+    MATCH_DIGIT: '\d+',
+    MATCH_NOSLASH: '[^/]+',
+}
+
+
+cdef int common_root_len(string1, string2):
+    cdef unsigned int bound, i
+    bound = min(len(string1), len(string2))
+    for i in range(bound):
+        if path[i] != self.pattern[i]:
+            return i
+    else:
+        return bound
 
 
 @cython.final
@@ -30,6 +47,7 @@ cdef class Edge:
     cdef unsigned int pattern_len
     cdef str pattern_prefix
     cdef str pattern_suffix
+    cdef unsigned int pattern_prefix_len
     cdef unsigned int pattern_suffix_len
     cdef public Node child
     cdef public unsigned int match_type
@@ -47,16 +65,73 @@ cdef class Edge:
             str rest = self.pattern[prefix_len:]
         new_child.connect(self.child, rest)
         self.child = new_child
+        new_child.compile()
         self.pattern = self.pattern[:prefix_len]
+
+    cpdef Node join(self, str path):
+        cdef:
+            unsigned int common_len
+            unsigned int path_len = len(path)
+            Edge candidate = Edge(path, None)
+        candidate.compile()
+        if self.pattern_prefix_len and candidate.pattern_prefix_len:
+            common_len = common_root_len(self.pattern_prefix, candidate.pattern_prefix)
+            if not common_len:  # Nothing common.
+                return None
+            elif common_len < self.pattern_prefix_len:  # Remote prefix is consumed but not self.
+                self.branch_at(common_len)
+                return self.child.insert(path[common_len:])
+            elif common_len < candidate.pattern_prefix_len:  # Self prefix is consumed but not remote.
+                if self.match_type:
+                    self.branch_at(common_len)
+                return self.child.insert(path[common_len:])
+            # else prefix are equal and fully consumed.
+        elif self.pattern_prefix_len or candidate.pattern_prefix_len:
+            return None
+        # We now know prefix are either none or equal.
+        if not self.match_type and not candidate.match_type:
+            # No placeholder, thus no suffix, we're done.
+            if self.pattern_prefix_len:
+                return self.child
+            return None
+        elif not self.match_type:
+            return self.child.insert(path[self.pattern_prefix_len:])
+        elif not candidate.match_type or self.match_type == MATCH_REGEX or self.match_type != candidate.match_type:
+            # We cannot merge placeholders.
+            if self.pattern_prefix_len:
+                self.branch_at(self.pattern_start)
+                return self.child.insert(path[candidate.pattern_prefix_len:])
+            else:  # Nothing matched, abort.
+                return None
+        else:  # match types are mergeable, let's see if we should also deal with suffix.
+            if not self.pattern_suffix and not candidate.pattern_suffix:
+                return self.child
+            elif not self.pattern_suffix:
+                return self.child.insert(path[candidate.pattern_end:])
+            elif not candidate.pattern_suffix:
+                self.branch_at(self.pattern_end)
+                return self.child.insert(path[candidate.pattern_end:])
+            else:
+                common_len = common_root_len(self.pattern_suffix, candidate.pattern_suffix)
+                if not common_len:  # Nothing common in the suffix.
+                    return self.child.insert(path[candidate.pattern_end+1:])
+                elif common_len == self.pattern_suffix_len == candidate.pattern_suffix_len:
+                    return self.child
+                elif common_len < self.pattern_suffix_len:  # Remaining self suffix.
+                    self.branch_at(self.pattern_end+common_len+1)
+                    if candidate.pattern_end+common_len+1 < candidate.pattern_len:
+                        return self.child.insert(path[candidate.pattern_end+common_len+1:])
+                    return self.child
+                elif common_len < candidate.pattern_suffix_len:  # Remaining candidate suffix.
+                    return self.child.insert(path[candidate.pattern_end+common_len+1:])
+                # else:  # The whole self suffix is consumed and both are equal.
 
     cpdef str compile(self):
         self.pattern_start = self.pattern.find('{')  # Slow, but at compile it's ok.
         self.pattern_end = self.pattern.find('}')
         self.pattern_len = len(self.pattern)
-        if self.pattern_start > 0:
-            self.pattern_prefix = self.pattern[:self.pattern_start]
-        else:
-            self.pattern_prefix = None
+        self.pattern_prefix = self.pattern[:self.pattern_start] if self.pattern_start != -1 else self.pattern
+        self.pattern_prefix_len = len(self.pattern_prefix)
         if self.pattern_end != -1 and <unsigned>self.pattern_end < self.pattern_len:
             self.pattern_suffix = self.pattern[self.pattern_end+1:]
             self.pattern_suffix_len = len(self.pattern_suffix)
@@ -66,18 +141,26 @@ cdef class Edge:
         cdef:
             list parts
             str pattern, segment
+            unsigned int match_type
         if self.pattern_start != -1 and self.pattern_end != -1:
-            segment = self.pattern[self.pattern_start:self.pattern_end]
-            parts = segment.split(':')
-            if len(parts) == 2:
-                pattern = parts[1]
-            else:
-                pattern = DEFAULT_MATCH_TYPE
-            self.match_type = MATCH_TYPES.get(pattern, MATCH_REGEX)
+            pattern, self.match_type = Edge.extract_pattern(self.pattern[self.pattern_start:self.pattern_end])
         else:
             pattern = self.pattern
             self.match_type = 0  # Reset, in case of branching.
         return pattern
+
+    @staticmethod
+    cdef tuple extract_pattern(str segment):
+        cdef:
+            list parts
+            unsigned int match_type
+        parts = segment.split(':')
+        if len(parts) == 2:
+            pattern = parts[1]
+        else:
+            pattern = DEFAULT_MATCH_TYPE
+        match_type = MATCH_TYPES.get(pattern, MATCH_REGEX)
+        return pattern, match_type
 
     cdef unsigned int match(self, str path, unsigned int path_len, list params):
         cdef:
@@ -169,26 +252,15 @@ cdef class Node:
             self.edges.append(edge)
         return edge
 
-    cdef common_prefix(self, str path):
+    cdef Node common_edge(self, str path):
         cdef:
-            unsigned int i, bound
-            unsigned int path_len = len(path)
             Edge edge
+            Node node
         if self.edges:
             for edge in self.edges:
-                bound = min(path_len, len(edge.pattern))
-                i = 0
-                for i in range(bound):
-                    if path[i] != edge.pattern[i]:
-                        # Are we in the middle of a placeholder?
-                        if '{' in path[:i] and not '}' in path[:i]:
-                            i = path.find('{')
-                        break
-                else:
-                    i = bound
-                if i:
-                    return edge, path[:i]
-        return None, None
+                node = edge.join(path)
+                if node:
+                    return node
 
     cdef Edge match(self, str path, list params):
         cdef:
@@ -217,7 +289,6 @@ cdef class Node:
                         return edge.child.match(path[match_len:], params)
         return None
 
-
     cdef void compile(self):
         cdef:
             bool has_slug = False
@@ -239,10 +310,55 @@ cdef class Node:
                 self.pattern = pattern
                 self.regex = re.compile(pattern)
 
+    cdef Node insert(self, str path):
+        cdef:
+            Node node
+            # common edge
+            Edge edge = None
+            str prefix
+            int bound, end
+            unsigned int nb_slugs
+
+        print(f'Node.insert "{path}"')
+        # If there is no path to insert at the node, we just increase the mount
+        # point on the node and append the route.
+        if not len(path):
+            print('No path, aborting insert')
+            return self
+
+        node = self.common_edge(path)
+
+        if node:
+            print('Found a common edge', path, node)
+            return node
+
+        print('No node found, create a new one')
+
+        nb_slugs = path.count('{')
+        start = path.find('{')
+        if nb_slugs > 1:
+            # Break into parts
+            child = Node()
+            start = path.find('{', start + 1)  # Goto the next one.
+            self.connect(child, path[:start])
+            return child.insert(path[start:])
+        else:
+            child = Node()
+            edge = self.connect(child, path)
+            if nb_slugs:
+                edge.compile()
+                if edge.match_type == MATCH_REGEX:  # Non optimizable, split if pattern has prefix or suffix.
+                    if start > 0:  # slug does not start at first char (eg. foo{slug})
+                        edge.branch_at(start)
+                    end = path.find('}')
+                    if end+1 < len(path):  # slug does not end pattern (eg. {slug}foo)
+                        edge.branch_at(end+1)
+            return child
+
 
 cdef class Routes:
 
-    cdef Node root
+    cdef public Node root
 
     def __cinit__(self):
         self.root = Node()
@@ -251,7 +367,7 @@ cdef class Routes:
         cdef Node node
         if path.count('{') != path.count('}'):
             raise InvalidRoute('Unbalanced curly brackets for "{path}"'.format(path=path))
-        node = self.insert(self.root, path)
+        node = self.root.insert(path)
         node.attach_route(path, payload)
         self.compile(self.root)
 
@@ -273,25 +389,7 @@ cdef class Routes:
         return None, None
 
     def dump(self):
-        self._dump(self.root)
-
-    cdef _dump(self, node, level=0):
-        i = " " * level * 4
-        print(f'{i}(o)')
-        if node.pattern:
-            print(f'{i}| regexp: %s' % node.pattern)
-        if node.payload:
-            print(f'{i}| data: %s' % node.payload)
-        if node.path:
-            print(f'{i}| path: %s' % node.path)
-            print(f'{i}| slugs: %s' % node.slugs)
-        if node.edges:
-            for edge in node.edges:
-                print(f'{i}' + '\--- %s' % edge.pattern)
-                if edge.match_type:
-                    print(f'{i} |    match_type: %d' % edge.match_type)
-                if edge.child:
-                    self._dump(edge.child, level + 1)
+        dump(self.root)
 
     cdef compile(self, Node node):
         cdef:
@@ -301,47 +399,23 @@ cdef class Routes:
             for edge in node.edges:
                 self.compile(edge.child)
 
-    cdef Node insert(self, Node tree, str path):
-        cdef:
-            Node node = tree
-            # common edge
-            Edge edge = None
-            str prefix
-            int bound, end
-            unsigned int nb_slugs
 
-        # If there is no path to insert at the node, we just increase the mount
-        # point on the node and append the route.
-        if not len(path):
-            return tree
-
-        edge, prefix = node.common_prefix(path)
-
-        if not edge:
-            nb_slugs = path.count('{')
-            start = path.find('{')
-            if nb_slugs > 1:
-                # Break into parts
-                child = Node()
-                start = path.find('{', start + 1)  # Goto the next one.
-                node.connect(child, path[:start])
-                return self.insert(child, path[start:])
+cdef dump(node, level=0):
+    types = {v: k for k, v in MATCH_TYPES.items()}
+    i = " " * level * 4
+    print(f'{i}(o)')
+    if node.pattern:
+        print(f'{i}| regexp: %s' % node.pattern)
+    if node.payload:
+        print(f'{i}| data: %s' % node.payload)
+    if node.path:
+        print(f'{i}| path: %s' % node.path)
+        print(f'{i}| slugs: %s' % node.slugs)
+    if node.edges:
+        for edge in node.edges:
+            if edge.match_type:
+                print(f'{i}' + '\--- {%s}' % types.get(edge.match_type))
             else:
-                child = Node()
-                edge = node.connect(child, path)
-                if nb_slugs:
-                    edge.compile()
-                    if edge.match_type == MATCH_REGEX:  # Non optimizable, split if pattern has prefix or suffix.
-                        if start > 0:  # slug does not start at first char (eg. foo{slug})
-                            edge.branch_at(start)
-                        end = path.find('}')
-                        if end+1 < len(path):  # slug does not end pattern (eg. {slug}foo)
-                            edge.branch_at(end+1)
-                return child
-        elif len(prefix) == len(edge.pattern):
-            if len(path) > len(prefix):
-                return self.insert(edge.child, path[len(prefix):])
-            return edge.child
-        elif len(prefix) < len(edge.pattern):
-            edge.branch_at(len(prefix))
-            return self.insert(edge.child, path[len(prefix):])
+                print(f'{i}' + '\--- %s' % edge.pattern)
+            if edge.child:
+                dump(edge.child, level + 1)
