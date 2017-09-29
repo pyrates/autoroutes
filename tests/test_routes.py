@@ -65,6 +65,20 @@ def test_add_param_regex_can_be_complex(routes):
     assert routes.match('/foo/nowhere')[1] is None
 
 
+def test_add_with_clashing_regexes(routes):
+    routes.add('/foo/{path:[abc]}', something='x')
+    routes.add('/foo/{path:[xyz]}', something='y')
+    assert routes.match('/foo/a') == ({'something': 'x'}, {'path': 'a'})
+    assert routes.match('/foo/x') == ({'something': 'y'}, {'path': 'x'})
+
+
+def test_add_with_regex_clashing_with_placeholder(routes):
+    routes.add('/foo/{path:[abc]}', something='x')
+    routes.add('/foo/{path:digit}', something='y')
+    assert routes.match('/foo/a') == ({'something': 'x'}, {'path': 'a'})
+    assert routes.match('/foo/12') == ({'something': 'y'}, {'path': '12'})
+
+
 def test_add_can_use_shortcut_types(routes):
     routes.add('/foo/{id:digit}/path', something='x')
     assert routes.match('/foo/123/path')[1] == {'id': '123'}

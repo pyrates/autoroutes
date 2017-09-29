@@ -4,8 +4,9 @@ from autoroutes import Edge, Node
 
 
 @pytest.mark.parametrize('pattern,expected', [
-    ['{id}', 'string'],
-    ['{id:digit}', 'digit'],
+    ['{id}', '[^/]+'],
+    ['{id:string}', '[^/]+'],
+    ['{id:digit}', '\d+'],
     ['{id:\d+}', '\d+'],
     ['{id:[abc]}', '[abc]'],
     ['{id:.+}', '.+'],

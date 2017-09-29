@@ -128,13 +128,14 @@ cdef class Edge:
         cdef:
             list parts
             unsigned int match_type
+            str pattern
         parts = segment.split(':')
         if len(parts) == 2:
             pattern = parts[1]
         else:
             pattern = DEFAULT_MATCH_TYPE
         match_type = MATCH_TYPES.get(pattern, MATCH_REGEX)
-        return pattern, match_type
+        return PATTERNS.get(match_type, pattern), match_type
 
     cdef unsigned int match(self, str path, unsigned int path_len, list params):
         cdef:
