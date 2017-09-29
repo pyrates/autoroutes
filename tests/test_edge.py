@@ -11,7 +11,9 @@ from autoroutes import Edge, Node
     ['{id:.+}', '.+'],
 ])
 def test_edge_compile(pattern, expected):
-    assert Edge(pattern, Node()).compile() == expected
+    edge = Edge(pattern, Node())
+    edge.compile()
+    assert edge.regex == expected
 
 
 def test_edge_insert_same_path(routes):

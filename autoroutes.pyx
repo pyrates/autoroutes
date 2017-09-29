@@ -42,6 +42,7 @@ cdef int common_root_len(string1, string2):
 @cython.final
 cdef class Edge:
     cdef public str pattern
+    cdef public str regex
     cdef int pattern_start
     cdef int pattern_end
     cdef unsigned int pattern_len
@@ -52,9 +53,10 @@ cdef class Edge:
     cdef public Node child
     cdef public unsigned int match_type
 
-    def __cinit__(self, pattern, child):
+    def __init__(self, pattern, child):
         self.pattern = pattern
         self.child = child
+        self.compile()
 
     def __repr__(self):
         return '<Edge {}>'.format(self.pattern)
@@ -67,12 +69,12 @@ cdef class Edge:
         self.child = new_child
         new_child.compile()
         self.pattern = self.pattern[:prefix_len]
+        self.compile()
 
     cdef Node join(self, str path):
         cdef:
             unsigned int local_index, candidate_index
             Edge candidate = Edge(path, None)
-        candidate.compile()
         local_index, candidate_index = self.compare(candidate)
         del candidate
         if not local_index:
@@ -116,16 +118,11 @@ cdef class Edge:
         else:
             self.pattern_suffix = None
             self.pattern_suffix_len = 0
-        cdef:
-            list parts
-            str pattern, segment
-            unsigned int match_type
         if self.pattern_start != -1 and self.pattern_end != -1:
-            pattern, self.match_type = self.extract_pattern(self.pattern[self.pattern_start:self.pattern_end])
+            self.regex, self.match_type = self.extract_pattern(self.pattern[self.pattern_start:self.pattern_end])
         else:
-            pattern = self.pattern
+            self.regex = self.pattern
             self.match_type = 0  # Reset, in case of branching.
-        return pattern
 
     cdef tuple extract_pattern(self, str segment):
         cdef:
@@ -275,7 +272,7 @@ cdef class Node:
         if self.edges:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
-                pattern += '^({})'.format(edge.compile())
+                pattern += '^({})'.format(edge.regex)
                 if edge.pattern.find('{') != -1:
                     if edge.match_type == MATCH_REGEX:
                         has_slug = True
@@ -312,7 +309,6 @@ cdef class Node:
             child = Node()
             edge = self.connect(child, path)
             if nb_slugs:
-                edge.compile()
                 if edge.match_type == MATCH_REGEX:  # Non optimizable, split if pattern has prefix or suffix.
                     if start > 0:  # slug does not start at first char (eg. foo{slug})
                         edge.branch_at(start)
