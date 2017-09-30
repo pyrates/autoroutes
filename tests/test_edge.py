@@ -259,3 +259,37 @@ def test_edge_join_same_suffix_root(routes):
     leaf = root.edges[0].child.edges[1].child
     assert leaf.payload == {'x': '2'}
     assert root.edges[0].child.edges[1].pattern == 'z'
+
+
+def test_edge_insert_same_placeholder_and_suffix(routes):
+    routes.add('{bar}/foo', x='1')
+    root = routes.root
+    assert len(root.edges) == 1
+    routes.add('{bar}/foo', y='2')
+    assert len(root.edges) == 1
+    assert root.edges[0].child.payload == {'x': '1', 'y': '2'}
+
+
+def test_edge_insert_same_placeholder_with_different_suffix(routes):
+    routes.add('{bar}/foo', x='1')
+    root = routes.root
+    assert len(root.edges) == 1
+    assert root.edges[0].child.payload == {'x': '1'}
+    routes.add('{bar}/bar', y='2')
+    assert len(root.edges) == 1
+    assert not root.edges[0].child.payload
+    assert len(root.edges[0].child.edges) == 2
+    assert root.edges[0].child.edges[0].child.payload == {'x': '1'}
+    assert root.edges[0].child.edges[1].child.payload == {'y': '2'}
+
+
+def test_edge_insert_same_placeholder_with_one_suffix(routes):
+    routes.add('{bar}', x='1')
+    root = routes.root
+    assert len(root.edges) == 1
+    assert root.edges[0].child.payload == {'x': '1'}
+    routes.add('{bar}/bar', y='2')
+    assert len(root.edges) == 1
+    assert root.edges[0].child.payload == {'x': '1'}
+    assert len(root.edges[0].child.edges) == 1
+    assert root.edges[0].child.edges[0].child.payload == {'y': '2'}
