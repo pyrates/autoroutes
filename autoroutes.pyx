@@ -107,6 +107,9 @@ cdef class Edge:
         return self.pattern_end + 1, other.pattern_end + 1
 
     cpdef str compile(self):
+        cdef:
+            list parts
+            str pattern = DEFAULT_MATCH_TYPE
         self.pattern_start = self.pattern.find('{')  # Slow, but at compile it's ok.
         self.pattern_end = self.pattern.find('}')
         self.pattern_len = len(self.pattern)
@@ -119,23 +122,15 @@ cdef class Edge:
             self.pattern_suffix = None
             self.pattern_suffix_len = 0
         if self.pattern_start != -1 and self.pattern_end != -1:
-            self.regex, self.match_type = self.extract_pattern(self.pattern[self.pattern_start:self.pattern_end])
+            segment = self.pattern[self.pattern_start:self.pattern_end]
+            parts = segment.split(':')
+            if len(parts) == 2:
+                pattern = parts[1]
+            self.match_type = MATCH_TYPES.get(pattern, MATCH_REGEX)
+            self.regex = PATTERNS.get(self.match_type, pattern)
         else:
             self.regex = self.pattern
             self.match_type = 0  # Reset, in case of branching.
-
-    cdef tuple extract_pattern(self, str segment):
-        cdef:
-            list parts
-            unsigned int match_type
-            str pattern
-        parts = segment.split(':')
-        if len(parts) == 2:
-            pattern = parts[1]
-        else:
-            pattern = DEFAULT_MATCH_TYPE
-        match_type = MATCH_TYPES.get(pattern, MATCH_REGEX)
-        return PATTERNS.get(match_type, pattern), match_type
 
     cdef unsigned int match(self, str path, unsigned int path_len, list params):
         cdef:
