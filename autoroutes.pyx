@@ -46,8 +46,8 @@ cdef class Edge:
     cdef int pattern_start
     cdef int pattern_end
     cdef unsigned int pattern_len
-    cdef str pattern_prefix
-    cdef str pattern_suffix
+    cdef public str pattern_prefix
+    cdef public str pattern_suffix
     cdef unsigned int pattern_prefix_len
     cdef unsigned int pattern_suffix_len
     cdef public Node child
@@ -359,7 +359,6 @@ cdef class Routes:
 
 
 cdef dump(node, level=0):
-    types = {v: k for k, v in MATCH_TYPES.items()}
     i = " " * level * 4
     print(f'{i}(o)')
     if node.pattern:
@@ -372,8 +371,9 @@ cdef dump(node, level=0):
     if node.edges:
         for edge in node.edges:
             if edge.match_type:
-                print(f'{i}' + '\--- {%s}' % types.get(edge.match_type))
+                pattern = edge.pattern_prefix + edge.regex + edge.pattern_suffix or ''
             else:
-                print(f'{i}' + '\--- %s' % edge.pattern)
+                pattern = edge.pattern
+            print(f'{i}' + '\--- %s' % pattern)
             if edge.child:
                 dump(edge.child, level + 1)
