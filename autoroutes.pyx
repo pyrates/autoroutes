@@ -183,7 +183,7 @@ cdef class Edge:
                     i = path_len
         if i:
             params.append(path[self.pattern_start:i])  # Slow.
-            if self.pattern_suffix_len and i < self.pattern_len:
+            if self.pattern_suffix_len:
                 # The placeholder is not at the end (eg. "{name}.json").
                 if path[i:i+self.pattern_suffix_len] != self.pattern_suffix:
                     return 0

@@ -204,3 +204,9 @@ def test_add_deals_with_multiple_clashing_vars(routes):
         {'foo': 'pbf'}, {'names': 'mylayer', 'x': '0', 'y': '0', 'z': '0'})
     assert routes.match('/mylayer/0/0/0.mvt') == (
         {'foo': 'mvt'}, {'names': 'mylayer', 'x': '0', 'y': '0', 'z': '0'})
+
+
+def test_match_long_placeholder_with_suffix(routes):
+    routes.add('/{bar}/', something='x')
+    assert routes.match('/sdlfkseirsldkfjsie/') == (
+        {'something': 'x'}, {'bar': 'sdlfkseirsldkfjsie'})
