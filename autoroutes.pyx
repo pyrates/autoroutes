@@ -58,7 +58,7 @@ cdef class Edge:
         else:
             self.pattern_prefix = None
         if self.pattern_end != -1 and <unsigned>self.pattern_end < self.pattern_len:
-            self.pattern_suffix = self.pattern[self.pattern_end+1:]
+            self.pattern_suffix = self.pattern[self.pattern_end + 1:]
             self.pattern_suffix_len = len(self.pattern_suffix)
         else:
             self.pattern_suffix = None
@@ -132,9 +132,9 @@ cdef class Edge:
             params.append(path[self.pattern_start:i])  # Slow.
             if self.pattern_suffix_len and i < self.pattern_len:
                 # The placeholder is not at the end (eg. "{name}.json").
-                if path[i:i+self.pattern_suffix_len] != self.pattern_suffix:
+                if path[i:i + self.pattern_suffix_len] != self.pattern_suffix:
                     return 0
-                i = i+self.pattern_suffix_len
+                i = i + self.pattern_suffix_len
         return i
 
 
@@ -181,7 +181,7 @@ cdef class Node:
                 for i in range(bound):
                     if path[i] != edge.pattern[i]:
                         # Are we in the middle of a placeholder?
-                        if '{' in path[:i] and not '}' in path[:i]:
+                        if '{' in path[:i] and '}' not in path[:i]:
                             i = path.find('{')
                         break
                 else:
@@ -202,7 +202,7 @@ cdef class Node:
                 matched = self.regex.match(path)
                 if matched:
                     params.append(matched.group(matched.lastindex))
-                    edge = self.edges[matched.lastindex-1]
+                    edge = self.edges[matched.lastindex - 1]
                     if matched.end() == path_len:
                         if edge.child.path:
                             return edge
@@ -217,7 +217,6 @@ cdef class Node:
                         return edge.child.match(path[match_len:], params)
         return None
 
-
     cdef void compile(self):
         cdef:
             bool has_slug = False
@@ -231,7 +230,7 @@ cdef class Node:
                 if edge.pattern.find('{') != -1:
                     if edge.match_type == MATCH_REGEX:
                         has_slug = True
-                if i+1 < total:
+                if i + 1 < total:
                     pattern += '|'
 
             # Run in regex mode only if we have a non optimizable pattern.
@@ -335,8 +334,8 @@ cdef class Routes:
                         if start > 0:  # slug does not start at first char (eg. foo{slug})
                             edge.branch_at(start)
                         end = path.find('}')
-                        if end+1 < len(path):  # slug does not end pattern (eg. {slug}foo)
-                            edge.branch_at(end+1)
+                        if end + 1 < len(path):  # slug does not end pattern (eg. {slug}foo)
+                            edge.branch_at(end + 1)
                 return child
         elif len(prefix) == len(edge.pattern):
             if len(path) > len(prefix):
