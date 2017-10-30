@@ -43,13 +43,13 @@ cdef int common_root_len(string1, string2):
 cdef class Edge:
     cdef public str pattern
     cdef public str regex
-    cdef int pattern_start
-    cdef int pattern_end
+    cdef int placeholder_start
+    cdef int placeholder_end
     cdef unsigned int pattern_len
-    cdef public str pattern_prefix
-    cdef public str pattern_suffix
-    cdef unsigned int pattern_prefix_len
-    cdef unsigned int pattern_suffix_len
+    cdef public str prefix
+    cdef public str suffix
+    cdef unsigned int prefix_len
+    cdef unsigned int suffix_len
     cdef public Node child
     cdef public unsigned int match_type
 
@@ -87,47 +87,59 @@ cdef class Edge:
 
     cdef tuple compare(self, Edge other):
         cdef unsigned int common_len
-        if self.pattern_prefix_len and other.pattern_prefix_len:
-            common_len = common_root_len(self.pattern_prefix, other.pattern_prefix)
+        if self.prefix_len and other.prefix_len:
+            common_len = common_root_len(self.prefix, other.prefix)
             if not common_len:  # Nothing common.
                 return 0, 0
             # At least one prefix is not finished, no need to compare further.
-            elif common_len < self.pattern_prefix_len or common_len < other.pattern_prefix_len:
+            elif common_len < self.prefix_len or common_len < other.prefix_len:
                 return common_len, common_len
-        elif self.pattern_prefix_len or other.pattern_prefix_len:
+        elif self.prefix_len or other.prefix_len:
             return 0, 0
         # We now know prefix are either none or equal.
         if not self.match_type or self.match_type == MATCH_REGEX or self.match_type != other.match_type:
-            return self.pattern_prefix_len, other.pattern_prefix_len
+            return self.prefix_len, other.prefix_len
         # We now know match types are mergeable, let's see if we should also deal with suffix.
-        if self.pattern_suffix and other.pattern_suffix:
-            common_len = common_root_len(self.pattern_suffix, other.pattern_suffix)
+        if self.suffix and other.suffix:
+            common_len = common_root_len(self.suffix, other.suffix)
             if common_len:
-                return self.pattern_end + common_len + 1, other.pattern_end + common_len + 1
-        return self.pattern_end + 1, other.pattern_end + 1
+                return self.placeholder_end + common_len + 1, other.placeholder_end + common_len + 1
+        return self.placeholder_end + 1, other.placeholder_end + 1
 
     cpdef str compile(self):
+        """Compute and cache pattern properties.
+
+        Eg. with pattern="foo{id}bar", we would have
+        prefix=foo
+        suffix=bar
+        placeholder_start=3
+        placeholder_end=6
+        """
         cdef:
             list parts
-            str match_type = DEFAULT_MATCH_TYPE
-        self.pattern_start = self.pattern.find('{')  # Slow, but at compile it's ok.
-        self.pattern_end = self.pattern.find('}')
+            str match_type_or_regex = DEFAULT_MATCH_TYPE
+        self.placeholder_start = self.pattern.find('{')  # Slow, but at compile it's ok.
+        self.placeholder_end = self.pattern.find('}')
         self.pattern_len = len(self.pattern)
-        self.pattern_prefix = self.pattern[:self.pattern_start] if self.pattern_start != -1 else self.pattern
-        self.pattern_prefix_len = len(self.pattern_prefix)
-        if self.pattern_end != -1 and <unsigned>self.pattern_end < self.pattern_len:
-            self.pattern_suffix = self.pattern[self.pattern_end+1:]
-            self.pattern_suffix_len = len(self.pattern_suffix)
+        self.prefix = self.pattern[:self.placeholder_start] if self.placeholder_start != -1 else self.pattern
+        self.prefix_len = len(self.prefix)
+        if self.placeholder_end != -1 and <unsigned>self.placeholder_end < self.pattern_len:
+            self.suffix = self.pattern[self.placeholder_end+1:]
+            self.suffix_len = len(self.suffix)
         else:
-            self.pattern_suffix = None
-            self.pattern_suffix_len = 0
-        if self.pattern_start != -1 and self.pattern_end != -1:
-            segment = self.pattern[self.pattern_start:self.pattern_end]
+            self.suffix = None
+            self.suffix_len = 0
+        if self.placeholder_start != -1 and self.placeholder_end != -1:
+            segment = self.pattern[self.placeholder_start:self.placeholder_end]
             parts = segment.split(':')
             if len(parts) == 2:
-                match_type = parts[1]
-            self.match_type = MATCH_TYPES.get(match_type, MATCH_REGEX)
-            self.regex = PATTERNS.get(self.match_type, match_type)
+                match_type_or_regex = parts[1]
+            if match_type_or_regex in MATCH_TYPES:
+                self.match_type = MATCH_TYPES.get(match_type_or_regex)
+                self.regex = PATTERNS.get(self.match_type)
+            else:
+                self.match_type = MATCH_REGEX
+                self.regex = match_type_or_regex
         else:
             self.regex = self.pattern
             self.match_type = 0  # Reset, in case of branching.
@@ -141,53 +153,53 @@ cdef class Edge:
                 return self.pattern_len
             return 0
         # Placeholder is not at the start (eg. "foo.{ext}").
-        if self.pattern_start > 0:
-            if not self.pattern_prefix == path[:self.pattern_start]:
+        if self.placeholder_start > 0:
+            if not self.prefix == path[:self.placeholder_start]:
                 return 0
         if self.match_type == MATCH_ALL:
             i = path_len
         elif self.match_type == MATCH_NOSLASH:
-            for i in range(self.pattern_start, path_len):
+            for i in range(self.placeholder_start, path_len):
                 if path[i] == '/':
                     break
             else:
                 if i:
                     i = path_len
         elif self.match_type == MATCH_ALPHA:
-            for i in range(self.pattern_start, path_len):
+            for i in range(self.placeholder_start, path_len):
                 if not path[i].isalpha():
                     break
             else:
                 if i:
                     i = path_len
         elif self.match_type == MATCH_DIGIT:
-            for i in range(self.pattern_start, path_len):
+            for i in range(self.placeholder_start, path_len):
                 if not path[i].isdigit():
                     break
             else:
                 if i:
                     i = path_len
         elif self.match_type == MATCH_ALNUM:
-            for i in range(self.pattern_start, path_len):
+            for i in range(self.placeholder_start, path_len):
                 if not path[i].isalnum():
                     break
             else:
                 if i:
                     i = path_len
         elif self.match_type == MATCH_NODASH:
-            for i in range(self.pattern_start, path_len):
+            for i in range(self.placeholder_start, path_len):
                 if path[i] == '-':
                     break
             else:
                 if i:
                     i = path_len
         if i:
-            params.append(path[self.pattern_start:i])  # Slow.
-            if self.pattern_suffix_len:
+            params.append(path[self.placeholder_start:i])  # Slow.
+            if self.suffix_len:
                 # The placeholder is not at the end (eg. "{name}.json").
-                if path[i:i+self.pattern_suffix_len] != self.pattern_suffix:
+                if path[i:i+self.suffix_len] != self.suffix:
                     return 0
-                i = i + self.pattern_suffix_len
+                i = i + self.suffix_len
         return i
 
 
@@ -371,7 +383,7 @@ cdef dump(node, level=0):
     if node.edges:
         for edge in node.edges:
             if edge.match_type:
-                pattern = edge.pattern_prefix + edge.regex + edge.pattern_suffix or ''
+                pattern = edge.prefix + edge.regex + edge.suffix or ''
             else:
                 pattern = edge.pattern
             print(f'{i}' + '\--- %s' % pattern)
