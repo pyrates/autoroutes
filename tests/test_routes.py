@@ -1,15 +1,7 @@
 
 import pytest
 
-from autoroutes import Routes, InvalidRoute
-
-
-@pytest.fixture
-def routes():
-    routes_ = Routes()
-    yield routes_
-    routes_.dump()  # Will display only in case of failure.
-    del routes_
+from autoroutes import InvalidRoute
 
 
 def test_simple_follow(routes):
@@ -17,63 +9,77 @@ def test_simple_follow(routes):
     assert routes.match('/foo') == ({'something': 'x'}, {})
 
 
-def test_follow_root(routes):
+def test_add_root(routes):
     routes.add('/', something='x')
     assert routes.match('/') == ({'something': 'x'}, {})
 
 
-def test_follow_unicode_routes(routes):
+def test_add_unicode_routes(routes):
     routes.add('/éèà', something='àô')
     assert routes.match('/éèà') == ({'something': 'àô'}, {})
 
 
-def test_follow_unknown_path(routes):
+def test_add_unknown_path(routes):
     routes.add('/foo/', data='x')
     assert routes.match('/bar/') == (None, None)
 
 
-def test_follow_unknown_path_with_param(routes):
+def test_add_unknown_path_with_param(routes):
     routes.add('/foo/{id}', data='x')
     assert routes.match('/bar/foo') == (None, None)
 
 
-def test_follow_return_params(routes):
+def test_add_return_params(routes):
     routes.add('/foo/{id}', data='x')
     assert routes.match('/foo/bar')[1] == {'id': 'bar'}
 
 
-def test_follow_return_params_in_the_middle(routes):
+def test_add_return_params_in_the_middle(routes):
     routes.add('/foo/{id}/bar', data='x')
     assert routes.match('/foo/22/bar') == ({'data': 'x'}, {'id': '22'})
 
 
-def test_follow_can_handle_different_subpaths_after_placeholder(routes):
+def test_add_can_handle_different_subpaths_after_placeholder(routes):
     routes.add('/foo/{id}/bar', data='x')
     routes.add('/foo/{id}/baz', data='y')
     assert routes.match('/foo/22/bar') == ({'data': 'x'}, {'id': '22'})
     assert routes.match('/foo/33/baz') == ({'data': 'y'}, {'id': '33'})
 
 
-def test_follow_param_regex_can_be_changed(routes):
+def test_add_param_regex_can_be_changed(routes):
     routes.add('/foo/{id:\d+}', something='x')
     assert routes.match('/foo/bar') == (None, None)
     assert routes.match('/foo/22') == ({'something': 'x'}, {'id': '22'})
 
 
-def test_follow_param_regex_can_consume_slash(routes):
+def test_add_param_regex_can_consume_slash(routes):
     routes.add('/foo/{path:.+}', something='x')
     assert routes.match('/foo/path/to/somewhere') == \
         ({'something': 'x'}, {'path': 'path/to/somewhere'})
 
 
-def test_follow_param_regex_can_be_complex(routes):
+def test_add_param_regex_can_be_complex(routes):
     routes.add('/foo/{path:(some|any)where}', something='x')
     assert routes.match('/foo/somewhere')[1] == {'path': 'somewhere'}
     assert routes.match('/foo/anywhere')[1] == {'path': 'anywhere'}
     assert routes.match('/foo/nowhere')[1] is None
 
 
-def test_follow_can_use_shortcut_types(routes):
+def test_add_with_clashing_regexes(routes):
+    routes.add('/foo/{path:[abc]}', something='x')
+    routes.add('/foo/{path:[xyz]}', something='y')
+    assert routes.match('/foo/a') == ({'something': 'x'}, {'path': 'a'})
+    assert routes.match('/foo/x') == ({'something': 'y'}, {'path': 'x'})
+
+
+def test_add_with_regex_clashing_with_placeholder(routes):
+    routes.add('/foo/{path:[abc]}', something='x')
+    routes.add('/foo/{path:digit}', something='y')
+    assert routes.match('/foo/a') == ({'something': 'x'}, {'path': 'a'})
+    assert routes.match('/foo/12') == ({'something': 'y'}, {'path': '12'})
+
+
+def test_add_can_use_shortcut_types(routes):
     routes.add('/foo/{id:digit}/path', something='x')
     assert routes.match('/foo/123/path')[1] == {'id': '123'}
     assert routes.match('/foo/abc/path')[1] is None
@@ -98,13 +104,13 @@ def test_variable_type_is_alpha(routes):
     assert routes.match('/foo/a2')[1] is None
 
 
-def test_follow_segment_can_mix_string_and_param(routes):
+def test_add_segment_can_mix_string_and_param(routes):
     routes.add('/foo.{ext}', data='x')
     assert routes.match('/foo.json')[1] == {'ext': 'json'}
     assert routes.match('/foo.txt')[1] == {'ext': 'txt'}
 
 
-def test_follow_with_clashing_placeholders_of_different_types(routes):
+def test_add_with_clashing_placeholders_of_different_types(routes):
     routes.add('horse/{id:digit}/subpath', data='x')
     routes.add('horse/{id}/other', data='y')
     assert routes.match('horse/22/subpath') == ({'data': 'x'}, {'id': '22'})
@@ -121,7 +127,7 @@ def test_connect_can_be_updated(routes):
     assert routes.match('/foo/') == ({'data': 'new', 'other': 'new'}, {})
 
 
-def test_follow_accept_func_as_data(routes):
+def test_add_accept_func_as_data(routes):
 
     def handler():
         pass
@@ -130,26 +136,77 @@ def test_follow_accept_func_as_data(routes):
     assert routes.match('/foo') == ({'handler': handler}, {})
 
 
-def test_follow_accepts_multiple_params(routes):
+def test_add_accepts_multiple_params(routes):
     routes.add('/foo/{id}/bar/{sub}', something='x')
     assert routes.match('/foo/id/bar/su') == \
         ({'something': 'x'}, {'id': 'id', 'sub': 'su'})
 
 
-def test_follow_accepts_multiple_params_in_succession(routes):
+def test_add_accepts_multiple_params_in_succession(routes):
     routes.add('/foo/{id}/{sub}', something='x')
     assert routes.match('/foo/id/su') == \
         ({'something': 'x'}, {'id': 'id', 'sub': 'su'})
 
 
-def test_follow_can_deal_with_clashing_edges(routes):
+def test_add_can_deal_with_clashing_edges(routes):
     routes.add('/foo/{id}/path', something='x')
     routes.add('/foo/{id}/{sub}', something='y')
     assert routes.match('/foo/id/path') == ({'something': 'x'}, {'id': 'id'})
 
 
-def test_follow_respesct_clashing_edges_registration_order(routes):
+def test_add_respesct_clashing_edges_registration_order(routes):
     routes.add('/foo/{id}/{sub}', something='y')
     routes.add('/foo/{id}/path', something='x')
     assert routes.match('/foo/id/path') == \
         ({'something': 'y'}, {'id': 'id', 'sub': 'path'})
+
+
+def test_add_can_deal_with_clashing_vars_of_same_type(routes):
+    routes.add('/foo/{category}/{id:digit}.csv', something='c')
+    routes.add('/foo/{category}/{id:alnum}.txt', something='x')
+    routes.add('/foo/{category}/{id:alnum}.json', something='j')
+    assert routes.match('/foo/cat/id.txt') == (
+        {'something': 'x'}, {'id': 'id', 'category': 'cat'})
+    assert routes.match('/foo/cat/id.json') == (
+        {'something': 'j'}, {'id': 'id', 'category': 'cat'})
+    assert routes.match('/foo/cat/id.csv') == (None, None)
+    assert routes.match('/foo/cat/123.csv') == (
+        {'something': 'c'}, {'id': '123', 'category': 'cat'})
+
+
+def test_add_deals_with_clashing_vars_of_same_type_and_different_names(routes):
+    routes.add('/foo/{foo}/{id:digit}.csv', something='c')
+    routes.add('/foo/{bar}/{id:alnum}.txt', something='x')
+    routes.add('/foo/{baz}/{id:alnum}.json', something='j')
+    assert routes.match('/foo/cat/id.txt') == (
+        {'something': 'x'}, {'id': 'id', 'bar': 'cat'})
+    assert routes.match('/foo/cat/id.json') == (
+        {'something': 'j'}, {'id': 'id', 'baz': 'cat'})
+    assert routes.match('/foo/cat/id.csv') == (None, None)
+    assert routes.match('/foo/cat/123.csv') == (
+        {'something': 'c'}, {'id': '123', 'foo': 'cat'})
+
+
+def test_add_deals_with_multiple_clashing_vars(routes):
+    routes.add('/{names}/{z:digit}/{x:digit}/{y:digit}.pbf', foo='pbf')
+    routes.add('/{namespace}/{names}/{z:digit}/{x:digit}/{y:digit}.pbf',
+               foo='npbf')
+    routes.add('/{names}/{z:digit}/{x:digit}/{y:digit}.mvt', foo='mvt')
+    routes.add('/{namespace}/{names}/{z:digit}/{x:digit}/{y:digit}.mvt',
+               foo='nmvt')
+    assert routes.match('/default/mylayer/0/0/0.pbf') == (
+        {'foo': 'npbf'}, {'names': 'mylayer', 'namespace': 'default', 'x': '0',
+                          'y': '0', 'z': '0'})
+    assert routes.match('/default/mylayer/0/0/0.mvt') == (
+        {'foo': 'nmvt'}, {'names': 'mylayer', 'namespace': 'default', 'x': '0',
+                          'y': '0', 'z': '0'})
+    assert routes.match('/mylayer/0/0/0.pbf') == (
+        {'foo': 'pbf'}, {'names': 'mylayer', 'x': '0', 'y': '0', 'z': '0'})
+    assert routes.match('/mylayer/0/0/0.mvt') == (
+        {'foo': 'mvt'}, {'names': 'mylayer', 'x': '0', 'y': '0', 'z': '0'})
+
+
+def test_match_long_placeholder_with_suffix(routes):
+    routes.add('/{bar}/', something='x')
+    assert routes.match('/sdlfkseirsldkfjsie/') == (
+        {'something': 'x'}, {'bar': 'sdlfkseirsldkfjsie'})
