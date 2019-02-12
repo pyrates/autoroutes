@@ -163,36 +163,31 @@ cdef class Edge:
                 if path[i] == '/':
                     break
             else:
-                if i:
-                    i = path_len
+                i = path_len
         elif self.match_type == MATCH_ALPHA:
             for i in range(self.placeholder_start, path_len):
                 if not path[i].isalpha():
                     break
             else:
-                if i:
-                    i = path_len
+                i = path_len
         elif self.match_type == MATCH_DIGIT:
             for i in range(self.placeholder_start, path_len):
                 if not path[i].isdigit():
                     break
             else:
-                if i:
-                    i = path_len
+                i = path_len
         elif self.match_type == MATCH_ALNUM:
             for i in range(self.placeholder_start, path_len):
                 if not path[i].isalnum():
                     break
             else:
-                if i:
-                    i = path_len
+                i = path_len
         elif self.match_type == MATCH_NODASH:
             for i in range(self.placeholder_start, path_len):
                 if path[i] == '-':
                     break
             else:
-                if i:
-                    i = path_len
+                i = path_len
         if i:
             params.append(path[self.placeholder_start:i])  # Slow.
             if self.suffix_len:
