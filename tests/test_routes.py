@@ -154,6 +154,18 @@ def test_add_can_deal_with_clashing_edges(routes):
     assert routes.match('/foo/id/path') == ({'something': 'x'}, {'id': 'id'})
 
 
+def test_one_char_with_leading_placeholder(routes):
+    routes.add('/foo/path', something='x')
+    routes.add('/foo/{id}', something='y')
+    assert routes.match('/foo/i') == ({'something': 'y'}, {'id': 'i'})
+
+
+def test_one_char_with_leading_digit_placeholder(routes):
+    routes.add('/foo/path', something='x')
+    routes.add('/foo/{id:digit}', something='y')
+    assert routes.match('/foo/1') == ({'something': 'y'}, {'id': '1'})
+
+
 def test_add_respesct_clashing_edges_registration_order(routes):
     routes.add('/foo/{id}/{sub}', something='y')
     routes.add('/foo/{id}/path', something='x')
