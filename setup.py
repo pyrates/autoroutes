@@ -5,7 +5,7 @@ from setuptools import setup, Extension
 with Path(__file__).parent.joinpath('README.md').open(encoding='utf-8') as f:
     long_description = f.read()
 
-VERSION = (0, 2, 0)
+VERSION = (0, 2, 1)
 
 setup(
     name='autoroutes',
