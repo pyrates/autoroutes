@@ -1,13 +1,12 @@
 import pytest
-
 from autoroutes import Edge, Node
 
 
 @pytest.mark.parametrize('pattern,expected', [
     ['{id}', '[^/]+'],
     ['{id:string}', '[^/]+'],
-    ['{id:digit}', '\d+'],
-    ['{id:\d+}', '\d+'],
+    ['{id:digit}', r'\d+'],
+    [r'{id:\d+}', r'\d+'],
     ['{id:[abc]}', '[abc]'],
     ['{id:.+}', '.+'],
 ])

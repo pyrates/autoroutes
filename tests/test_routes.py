@@ -1,6 +1,5 @@
 
 import pytest
-
 from autoroutes import InvalidRoute
 
 
@@ -47,7 +46,7 @@ def test_add_can_handle_different_subpaths_after_placeholder(routes):
 
 
 def test_add_param_regex_can_be_changed(routes):
-    routes.add('/foo/{id:\d+}', something='x')
+    routes.add(r'/foo/{id:\d+}', something='x')
     assert routes.match('/foo/bar') == (None, None)
     assert routes.match('/foo/22') == ({'something': 'x'}, {'id': '22'})
 
