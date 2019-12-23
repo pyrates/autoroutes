@@ -59,7 +59,7 @@ Placeholders can appear anywhere in the path
 
 ## Benchmark
 
-![](benchmark.png)
+![](https://raw.githubusercontent.com/pyrates/autoroutes/master/benchmark.png)
 
 See [Benchmark](https://github.com/pyrates/autoroutes/wiki/Benchmark) for more
 details.
