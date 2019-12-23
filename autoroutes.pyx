@@ -250,8 +250,9 @@ cdef class Node:
             if self.pattern:
                 matched = self.regex.match(path)
                 if matched:
-                    params.append(matched.group(matched.lastindex))
                     edge = self.edges[matched.lastindex-1]
+                    if edge.placeholder_start != -1:  # Is the capture a slug value?
+                        params.append(matched.group(matched.lastindex))
                     if matched.end() == path_len:
                         if edge.child.path:
                             return edge

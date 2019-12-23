@@ -57,6 +57,13 @@ def test_add_param_regex_can_consume_slash(routes):
         ({'something': 'x'}, {'path': 'path/to/somewhere'})
 
 
+def test_add_param_regex_can_combine_with_flat_node(routes):
+    routes.add('/foo/cache/{path:.*}', something='x')
+    routes.add('/foo/{path:.*}', something='y')
+    assert routes.match('/foo/cache/path/to/somewhere') == \
+        ({'something': 'x'}, {'path': 'path/to/somewhere'})
+
+
 def test_add_param_regex_can_be_complex(routes):
     routes.add('/foo/{path:(some|any)where}', something='x')
     assert routes.match('/foo/somewhere')[1] == {'path': 'somewhere'}
