@@ -7,7 +7,8 @@ test:
 
 release: compile test
 	rm -rf dist/ build/ *.egg-info
-	python setup.py sdist upload
+	python setup.py sdist
+	twine upload dist/*
 
 install:
 	pip install -e .[dev]
