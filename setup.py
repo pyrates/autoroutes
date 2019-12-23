@@ -3,13 +3,14 @@ from pathlib import Path
 
 from setuptools import Extension, setup
 
-VERSION = (0, 2, 1)
+VERSION = (0, 2, 2)
 
 setup(
     name="autoroutes",
     version=".".join(map(str, VERSION)),
     description=__doc__,
     long_description=Path("README.md").read_text(),
+    long_description_content_type='text/markdown',
     author="Yohan Boniface",
     author_email="yohan.boniface@data.gouv.fr",
     url="https://github.com/pyrates/autoroutes",
