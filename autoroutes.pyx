@@ -211,6 +211,9 @@ cdef class Node:
     def __cinit__(self):
         self.payload = {}
 
+    def __repr__(self):
+        return f'<Node {self.path}|{self.pattern}>'
+
     cdef void attach_route(self, str path, dict payload):
         self.slugs = Node.SLUGS.findall(path)
         self.slugs_count = len(self.slugs)
@@ -253,7 +256,7 @@ cdef class Node:
                     edge = self.edges[matched.lastindex-1]
                     if edge.placeholder_start != -1:  # Is the capture a slug value?
                         params.append(matched.group(matched.lastindex))
-                    if matched.end() == path_len:
+                    if matched.end() == path_len and not edge.child.pattern:
                         if edge.child.path:
                             return edge
                     else:
