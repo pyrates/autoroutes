@@ -30,7 +30,7 @@ will match any character but the slash ('/').
 
 It's possible to control the placeholder type, either by:
 - using a named type: `alnum`, `digit`, `alpha`, `path` (matches everything),
-  `string` (default):
+  `any` (matches everything, including empty string), `string` (default):
 
         path/to/{var:digit}
         path/to/{var:string}  # Same as path/to/{var}

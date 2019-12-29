@@ -9,19 +9,21 @@ class InvalidRoute(Exception):
 
 
 cdef enum:
-    MATCH_DIGIT = 1, MATCH_ALNUM, MATCH_NOSLASH, MATCH_NODASH, MATCH_ALPHA, MATCH_ALL, MATCH_REGEX
+    MATCH_DIGIT = 1, MATCH_ALNUM, MATCH_NOSLASH, MATCH_NODASH, MATCH_ALPHA, MATCH_ALL, MATCH_ANY, MATCH_REGEX
 
 DEFAULT_MATCH_TYPE = 'string'  # Faster default, works for most common use case /{var}/.
 
 MATCH_TYPES = {
     'alnum': MATCH_ALNUM,
     'alpha': MATCH_ALPHA,
+    'any': MATCH_ANY,
     'digit': MATCH_DIGIT,
     DEFAULT_MATCH_TYPE: MATCH_NOSLASH,
     'path': MATCH_ALL,
 }
 PATTERNS = {
     MATCH_ALL: '.+',
+    MATCH_ANY: '.*',
     MATCH_ALNUM: '\w+',
     MATCH_ALPHA: '[a-zA-Z]+',
     MATCH_DIGIT: '\d+',
@@ -156,7 +158,7 @@ cdef class Edge:
         if self.placeholder_start > 0:
             if not self.prefix == path[:self.placeholder_start]:
                 return 0
-        if self.match_type == MATCH_ALL:
+        if self.match_type == MATCH_ALL or self.match_type == MATCH_ANY:
             i = path_len
         elif self.match_type == MATCH_NOSLASH:
             for i in range(self.placeholder_start, path_len):
@@ -188,7 +190,7 @@ cdef class Edge:
                     break
             else:
                 i = path_len
-        if i:
+        if i or self.match_type == MATCH_ANY:
             params.append(path[self.placeholder_start:i])  # Slow.
             if self.suffix_len:
                 # The placeholder is not at the end (eg. "{name}.json").
@@ -264,6 +266,8 @@ cdef class Node:
             else:
                 for edge in self.edges:
                     match_len = edge.match(path, path_len, params)
+                    if edge.match_type == MATCH_ANY:
+                        return edge
                     if match_len:
                         if path_len == match_len and edge.child.path:
                             return edge
