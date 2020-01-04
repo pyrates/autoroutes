@@ -235,3 +235,11 @@ def test_match_long_placeholder_with_suffix(routes):
     routes.add('/{bar}/', something='x')
     assert routes.match('/sdlfkseirsldkfjsie/') == (
         {'something': 'x'}, {'bar': 'sdlfkseirsldkfjsie'})
+
+
+def test_match_any(routes):
+    routes.add('/foo/priority', something='z')
+    routes.add('/foo/{bar:any}', something='x')
+    assert routes.match('/foo/baz') == ({'something': 'x'}, {'bar': 'baz'})
+    assert routes.match('/foo/') == ({'something': 'x'}, {'bar': ''})
+    assert routes.match('/foo/priority') == ({'something': 'z'}, {})
