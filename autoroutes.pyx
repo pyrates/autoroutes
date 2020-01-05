@@ -30,7 +30,6 @@ PATTERNS = {
     MATCH_NOSLASH: '[^/]+',
 }
 
-
 cdef int common_root_len(string1, string2):
     cdef unsigned int bound, i
     bound = min(len(string1), len(string2))
@@ -146,18 +145,19 @@ cdef class Edge:
             self.regex = self.pattern
             self.match_type = 0  # Reset, in case of branching.
 
-    cdef unsigned int match(self, str path, unsigned int path_len, list params):
+    cdef signed int match(self, str path, signed int path_len, list params):
         cdef:
-            unsigned int i = 0
+            signed int i = -1
+            str capture
+        # Flat match.
         if not self.match_type:
-            # Flat match.
             if path.startswith(self.pattern):
                 return self.pattern_len
-            return 0
+            return -1
         # Placeholder is not at the start (eg. "foo.{ext}").
         if self.placeholder_start > 0:
             if not self.prefix == path[:self.placeholder_start]:
-                return 0
+                return -1
         if self.match_type == MATCH_ALL or self.match_type == MATCH_ANY:
             i = path_len
         elif self.match_type == MATCH_NOSLASH:
@@ -190,13 +190,15 @@ cdef class Edge:
                     break
             else:
                 i = path_len
-        if i or self.match_type == MATCH_ANY:
-            params.append(path[self.placeholder_start:i])  # Slow.
-            if self.suffix_len:
-                # The placeholder is not at the end (eg. "{name}.json").
-                if path[i:i+self.suffix_len] != self.suffix:
-                    return 0
-                i = i + self.suffix_len
+        if i == 0 and self.match_type != MATCH_ANY:
+            return -1
+        capture = path[self.placeholder_start:i]
+        if self.suffix_len:
+            # The placeholder is not at the end (eg. "{name}.json").
+            if path[i:i+self.suffix_len] != self.suffix:
+                return -1
+            i = i + self.suffix_len
+        params.append(capture)  # Slow.
         return i
 
 
@@ -246,13 +248,13 @@ cdef class Node:
 
     cdef Edge match(self, str path, list params):
         cdef:
-            unsigned int path_len = len(path)
-            unsigned int match_len
+            signed int path_len = len(path)
+            signed int match_len
             Edge edge
             object matched
 
         if self.edges:
-            if self.pattern:
+            if self.pattern:  # Non optimizable branching.
                 matched = self.regex.match(path)
                 if matched:
                     edge = self.edges[matched.lastindex-1]
@@ -266,9 +268,7 @@ cdef class Node:
             else:
                 for edge in self.edges:
                     match_len = edge.match(path, path_len, params)
-                    if edge.match_type == MATCH_ANY:
-                        return edge
-                    if match_len:
+                    if match_len != -1:
                         if path_len == match_len and edge.child.path:
                             return edge
                         return edge.child.match(path[match_len:], params)
@@ -386,7 +386,7 @@ cdef dump(node, level=0):
     if node.edges:
         for edge in node.edges:
             if edge.match_type:
-                pattern = edge.prefix + edge.regex + edge.suffix or ''
+                pattern = edge.prefix + edge.regex + edge.suffix or '' + f" ({edge.match_type})"
             else:
                 pattern = edge.pattern
             print(f'{i}' + '\--- %s' % pattern)

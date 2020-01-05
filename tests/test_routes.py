@@ -243,3 +243,9 @@ def test_match_any(routes):
     assert routes.match('/foo/baz') == ({'something': 'x'}, {'bar': 'baz'})
     assert routes.match('/foo/') == ({'something': 'x'}, {'bar': ''})
     assert routes.match('/foo/priority') == ({'something': 'z'}, {})
+
+
+def test_match_any_with_prefix_should_not_match_path_wihout_prefix(routes):
+    routes.add("/foo/{path:any}", root="../foo/")
+    routes.add("/{path:any}", root=".")
+    assert routes.match("/") == ({"root": "."}, {"path":  ""})
