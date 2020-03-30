@@ -28,14 +28,29 @@ def test_add_unknown_path_with_param(routes):
     assert routes.match('/bar/foo') == (None, None)
 
 
-def test_add_return_params(routes):
+def test_match_returns_params(routes):
     routes.add('/foo/{id}', data='x')
     assert routes.match('/foo/bar')[1] == {'id': 'bar'}
 
 
-def test_add_return_params_in_the_middle(routes):
+def test_match_returns_params_in_the_middle(routes):
     routes.add('/foo/{id}/bar', data='x')
     assert routes.match('/foo/22/bar') == ({'data': 'x'}, {'id': '22'})
+
+
+def test_match_with_param_and_extension(routes):
+    routes.add('/foo/{id}.html', data='x')
+    assert routes.match('/foo/bar.html') == ({'data': 'x'}, {'id': 'bar'})
+
+
+def test_match_with_alnum_param_and_extension(routes):
+    routes.add('/foo/{id:alnum}.html', data='x')
+    assert routes.match('/foo/bar22.html') == ({'data': 'x'}, {'id': 'bar22'})
+
+
+def test_match_with_matchall_param_and_extension(routes):
+    routes.add('/foo/{id:path}.html', data='x')
+    assert routes.match('/foo/bar/2.html') == ({'data': 'x'}, {'id': 'bar/2'})
 
 
 def test_add_can_handle_different_subpaths_after_placeholder(routes):

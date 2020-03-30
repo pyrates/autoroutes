@@ -50,7 +50,7 @@ cdef class Edge:
     cdef public str prefix
     cdef public str suffix
     cdef unsigned int prefix_len
-    cdef unsigned int suffix_len
+    cdef signed int suffix_len
     cdef public Node child
     cdef public unsigned int match_type
 
@@ -148,6 +148,7 @@ cdef class Edge:
     cdef signed int match(self, str path, signed int path_len, list params):
         cdef:
             signed int i = -1
+            signed int consume_until = path_len
             str capture
         # Flat match.
         if not self.match_type:
@@ -158,38 +159,42 @@ cdef class Edge:
         if self.placeholder_start > 0:
             if not self.prefix == path[:self.placeholder_start]:
                 return -1
+        if self.suffix:
+            if self.suffix_len > path_len:
+                return -1
+            consume_until = path_len - self.suffix_len
         if self.match_type == MATCH_ALL or self.match_type == MATCH_ANY:
-            i = path_len
+            i = consume_until
         elif self.match_type == MATCH_NOSLASH:
-            for i in range(self.placeholder_start, path_len):
+            for i in range(self.placeholder_start, consume_until):
                 if path[i] == '/':
                     break
             else:
-                i = path_len
+                i = consume_until
         elif self.match_type == MATCH_ALPHA:
-            for i in range(self.placeholder_start, path_len):
+            for i in range(self.placeholder_start, consume_until):
                 if not path[i].isalpha():
                     break
             else:
-                i = path_len
+                i = consume_until
         elif self.match_type == MATCH_DIGIT:
-            for i in range(self.placeholder_start, path_len):
+            for i in range(self.placeholder_start, consume_until):
                 if not path[i].isdigit():
                     break
             else:
-                i = path_len
+                i = consume_until
         elif self.match_type == MATCH_ALNUM:
-            for i in range(self.placeholder_start, path_len):
+            for i in range(self.placeholder_start, consume_until):
                 if not path[i].isalnum():
                     break
             else:
-                i = path_len
+                i = consume_until
         elif self.match_type == MATCH_NODASH:
-            for i in range(self.placeholder_start, path_len):
+            for i in range(self.placeholder_start, consume_until):
                 if path[i] == '-':
                     break
             else:
-                i = path_len
+                i = consume_until
         if i == 0 and self.match_type != MATCH_ANY:
             return -1
         capture = path[self.placeholder_start:i]
@@ -337,6 +342,11 @@ cdef class Routes:
         self.root = Node()
 
     def add(self, str path, **payload):
+        """Add a new route
+
+        path: string describing the new route path
+        payload: any key/value that would be stored with the new route
+        """
         cdef Node node
         if path.count('{') != path.count('}'):
             raise InvalidRoute('Unbalanced curly brackets for "{path}"'.format(path=path))
@@ -345,6 +355,7 @@ cdef class Routes:
         self.compile(self.root)
 
     def match(self, str path):
+        """Try to find a route that matches `path`, and return the payload if any."""
         return self._match(path)
 
     cdef tuple _match(self, str path):
