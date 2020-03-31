@@ -270,3 +270,4 @@ def test_regex_combined_with_pattern_and_prefix(routes):
     routes.add("/foo/bar/{id}", data="a")
     routes.add(r"/foo/{id:[^\.]+}.html", data="b")
     assert routes.match("/foo/pouet.html") == ({"data": "b"}, {"id":  "pouet"})
+    assert routes.match("/foo/bar/pouet") == ({"data": "a"}, {"id":  "pouet"})

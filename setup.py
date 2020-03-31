@@ -3,7 +3,7 @@ from pathlib import Path
 
 from setuptools import Extension, setup
 
-VERSION = (0, 3, 3)
+VERSION = (0, 3, 4)
 
 setup(
     name="autoroutes",

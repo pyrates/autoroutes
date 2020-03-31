@@ -3,12 +3,13 @@ from autoroutes import Edge, Node
 
 
 @pytest.mark.parametrize('pattern,expected', [
-    ['{id}', '[^/]+'],
-    ['{id:string}', '[^/]+'],
-    ['{id:digit}', r'\d+'],
-    [r'{id:\d+}', r'\d+'],
-    ['{id:[abc]}', '[abc]'],
-    ['{id:.+}', '.+'],
+    ['{id}', '^([^/]+)'],
+    ['{id:string}', '^([^/]+)'],
+    ['{id:digit}', r'^(\d+)'],
+    [r'{id:\d+}', r'^(\d+)'],
+    ['{id:[abc]}', '^([abc])'],
+    ['{id:.+}', '^(.+)'],
+    ['bar/{id}', '^bar/([^/]+)'],
 ])
 def test_edge_compile(pattern, expected):
     edge = Edge(pattern, Node())

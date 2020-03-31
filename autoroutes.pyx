@@ -141,10 +141,9 @@ cdef class Edge:
             else:
                 self.match_type = MATCH_REGEX
                 self.regex = match_type_or_regex
-            if self.prefix:
-                self.regex = self.prefix + self.regex
+            self.regex = f"^{self.prefix}({self.regex})"
         else:  # Flat string.
-            self.regex = self.pattern
+            self.regex = f"^({self.pattern})"
             self.match_type = 0  # Reset, in case of branching.
 
     cdef signed int match(self, str path, signed int path_len, list params):
@@ -290,7 +289,7 @@ cdef class Node:
         if self.edges:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
-                pattern += '^({})'.format(edge.regex)
+                pattern += edge.regex
                 if edge.pattern.find('{') != -1 and edge.match_type == MATCH_REGEX:
                     has_param = True
                 if i + 1 < total:
