@@ -141,7 +141,9 @@ cdef class Edge:
             else:
                 self.match_type = MATCH_REGEX
                 self.regex = match_type_or_regex
-        else:
+            if self.prefix:
+                self.regex = self.prefix + self.regex
+        else:  # Flat string.
             self.regex = self.pattern
             self.match_type = 0  # Reset, in case of branching.
 
@@ -281,7 +283,7 @@ cdef class Node:
 
     cdef void compile(self):
         cdef:
-            bool has_slug = False
+            bool has_param = False
             str pattern = ''
             unsigned int total = 0
             Edge edge
@@ -289,14 +291,13 @@ cdef class Node:
             total = len(self.edges)
             for i, edge in enumerate(self.edges):
                 pattern += '^({})'.format(edge.regex)
-                if edge.pattern.find('{') != -1:
-                    if edge.match_type == MATCH_REGEX:
-                        has_slug = True
+                if edge.pattern.find('{') != -1 and edge.match_type == MATCH_REGEX:
+                    has_param = True
                 if i + 1 < total:
                     pattern += '|'
 
             # Run in regex mode only if we have a non optimizable pattern.
-            if has_slug:
+            if has_param:
                 self.pattern = pattern
                 self.regex = re.compile(pattern)
 

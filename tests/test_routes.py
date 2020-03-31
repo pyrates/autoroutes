@@ -264,3 +264,9 @@ def test_match_any_with_prefix_should_not_match_path_wihout_prefix(routes):
     routes.add("/foo/{path:any}", root="../foo/")
     routes.add("/{path:any}", root=".")
     assert routes.match("/") == ({"root": "."}, {"path":  ""})
+
+
+def test_regex_combined_with_pattern_and_prefix(routes):
+    routes.add("/foo/bar/{id}", data="a")
+    routes.add(r"/foo/{id:[^\.]+}.html", data="b")
+    assert routes.match("/foo/pouet.html") == ({"data": "b"}, {"id":  "pouet"})
