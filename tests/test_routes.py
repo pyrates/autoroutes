@@ -271,3 +271,9 @@ def test_regex_combined_with_pattern_and_prefix(routes):
     routes.add(r"/foo/{id:[^\.]+}.html", data="b")
     assert routes.match("/foo/pouet.html") == ({"data": "b"}, {"id":  "pouet"})
     assert routes.match("/foo/bar/pouet") == ({"data": "a"}, {"id":  "pouet"})
+
+
+def test_variables_without_slash_should_not_match_slash(routes):
+    routes.add('root/{foo}', data="one")
+    routes.add('root/foo/{bar}', data="two")
+    assert routes.match('root/foo/123') == ({"data": "two"}, {"bar": "123"})

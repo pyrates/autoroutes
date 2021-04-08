@@ -198,6 +198,10 @@ cdef class Edge:
                 i = consume_until
         if i == 0 and self.match_type != MATCH_ANY:
             return -1
+        # Not all path matched, and edge is a leaf, makes no sense to
+        # consume a part of a path
+        if i != path_len and not self.child.edges and not self.suffix_len:
+            return -1
         capture = path[self.placeholder_start:i]
         if self.suffix_len:
             # The placeholder is not at the end (eg. "{name}.json").
