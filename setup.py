@@ -34,5 +34,5 @@ setup(
     ],
     provides=["autoroutes"],
     include_package_data=True,
-    extras_require={"dev": ["cython", "pytest"]},
+    extras_require={"dev": ["cython", "pytest", "twine"]},
 )
