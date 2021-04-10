@@ -23,6 +23,9 @@ routes.match('path/to/resource/1234')
 > ({'something': 'value', 'anything': 'else'}, {'id': '1234'})
 ```
 
+Note: the order the routes are registered matters. At match time, routes will be
+tried in that order.
+
 ### Placeholders
 
 Placeholders are defined by a curly brace pair: `path/{var}`. By default, this
