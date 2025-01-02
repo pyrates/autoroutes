@@ -5,10 +5,10 @@ compile:
 test:
 	py.test -v
 
-release: compile test
+release: install test
 	rm -rf dist/ build/ *.egg-info
-	python setup.py sdist
-	twine upload dist/*
+	python -m build
+	twine upload dist/*.tar.gz
 
 install:
 	pip install -e .[dev]
